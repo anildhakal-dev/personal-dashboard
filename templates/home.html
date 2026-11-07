@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; }
+    .date-pill {
+        padding: 10px 16px; border-radius: 30px;
+        background: var(--panel); border: 1px solid var(--border);
+        font-weight: 600; font-size: 14px;
+    }
+
+    /* Three stat boxes */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 22px; }
+    .stat { display: flex; align-items: center; gap: 16px; margin: 0; }
+    .stat .icon {
+        width: 50px; height: 50px; border-radius: 14px;
+        display: grid; place-items: center; font-size: 22px;
+    }
+    .stat .num { font-size: 30px; font-weight: 800; line-height: 1; }
+    .stat .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .i-purple { background: rgba(139, 92, 246, 0.18); }
+    .i-green  { background: rgba(52, 211, 153, 0.18); }
+
+    /* Progress ring: conic-gradient fills the circle up to the percent */
+    .ring {
+        width: 54px; height: 54px; border-radius: 50%;
+        background: conic-gradient(var(--cyan) calc({{ percent }} * 1%), rgba(255,255,255,0.08) 0);
+        display: grid; place-items: center;
+    }
+    .ring::after {
+        content: "{{ percent }}%";
+        width: 42px; height: 42px; border-radius: 50%;
+        background: #151827;
+        display: grid; place-items: center;
+        font-size: 12px; font-weight: 700;
+    }
+
+    /* Add task box */
+    .add-row { display: flex; gap: 10px; margin-bottom: 18px; }
+    .add-row input {
+        flex: 1;
+        font-family: inherit; font-size: 15px;
+        padding: 13px 16px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        outline: none;
+        transition: border 0.2s, box-shadow 0.2s;
+    }
+    .add-row input::placeholder { color: var(--muted); }
+    .add-row input[type="date"] { flex: 0 0 170px; color-scheme: dark; }
+    .add-row input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.2); }
+
+    /* Each task row */
+    .task {
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid transparent;
+        margin-bottom: 8px;
+        transition: all 0.2s;
+        animation: slideIn 0.35s ease both;
+    }
+    .task:hover { border-color: var(--border); background: rgba(255,255,255,0.06); transform: translateX(4px); }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .task .title { flex: 1; font-weight: 500; }
+    .task form { margin: 0; }
+    .task.done .title { text-decoration: line-through; color: var(--muted); }
+    .task.done { opacity: 0.6; }
+
+    .tick {
+        width: 26px; height: 26px; padding: 0;
+        border-radius: 8px;
+        background: transparent;
+        border: 2px solid var(--purple);
+        box-shadow: none;
+        font-size: 14px;
+    }
+    .tick:hover { transform: scale(1.1); box-shadow: 0 0 12px rgba(139,92,246,0.6); }
+    .task.done .tick { background: linear-gradient(135deg, var(--green), var(--cyan)); border-color: transparent; }
+
+    .delete {
+        background: transparent; box-shadow: none;
+        color: var(--muted); padding: 6px 10px; opacity: 0;
+    }
+    .task:hover .delete { opacity: 1; }
+    .delete:hover { color: var(--red); background: rgba(248,113,113,0.12); transform: none; box-shadow: none; }
+
+    /* Due date badges */
+    .badge {
+        font-size: 12px; font-weight: 700;
+        padding: 5px 11px; border-radius: 20px;
+        white-space: nowrap;
+    }
+    .badge.red    { background: rgba(248,113,113,0.15); color: #fca5a5; box-shadow: 0 0 14px rgba(248,113,113,0.25); }
+    .badge.orange { background: rgba(251,146,60,0.15);  color: #fdba74; }
+    .badge.blue   { background: rgba(34,211,238,0.12);  color: #67e8f9; }
+    .badge.grey   { background: rgba(255,255,255,0.06); color: var(--muted); }
+    .task.done .badge { display: none; }
+    .i-red { background: rgba(248,113,113,0.18); }
+
+    .empty { text-align: center; padding: 30px 0; color: var(--muted); }
+    .empty .big { font-size: 40px; }
+
+    @media (max-width: 760px) {
+        .stats { grid-template-columns: 1fr 1fr; }
+        .add-row { flex-wrap: wrap; }
+        .add-row input[type="date"] { flex: 1; }
+        h1 { font-size: 26px; }
+        .delete { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="top">
+    <div>
+        <p class="muted" style="margin:0 0 6px">{{ greeting }},</p>
+        <h1>Anil <span class="gradient-text">👋 let's get things done</span></h1>
+    </div>
+    <div class="date-pill">📆 {{ today }}</div>
+</div>
+
+<!-- Stat boxes -->
+<div class="stats">
+    <div class="card stat">
+        <div class="icon i-purple">📝</div>
+        <div><div class="num">{{ left }}</div><div class="label">Tasks to do</div></div>
+    </div>
+    <div class="card stat">
+        <div class="icon i-green">✅</div>
+        <div><div class="num">{{ done }}</div><div class="label">Completed</div></div>
+    </div>
+    <div class="card stat">
+        <div class="icon i-red">⏰</div>
+        <div><div class="num">{{ overdue }}</div><div class="label">Overdue</div></div>
+    </div>
+    <div class="card stat">
+        <div class="ring"></div>
+        <div><div class="num" style="font-size:18px">Progress</div><div class="label">done</div></div>
+    </div>
+</div>
+
+<!-- To-do list -->
+<div class="card">
+    <h2>✨ To-do list</h2>
+
+    <form class="add-row" method="POST" action="/add-task">
+        <input type="text" name="title" placeholder="What do you need to do?" required autofocus>
+        <input type="date" name="due" title="Due date (optional)">
+        <button type="submit">+ Add</button>
+    </form>
+
+    {% for task in tasks %}
+    <div class="task {% if task.done %}done{% endif %}" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+        <form method="POST" action="/toggle/{{ task.id }}">
+            <button class="tick" title="Tick / untick">{% if task.done %}✓{% endif %}</button>
+        </form>
+        <span class="title">{{ task.title }}</span>
+        {% if task.badge %}
+        <span class="badge {{ task.colour }}">{{ task.badge }}</span>
+        {% endif %}
+        <form method="POST" action="/delete-task/{{ task.id }}">
+            <button class="delete" title="Delete">🗑</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="empty">
+        <div class="big">🌤</div>
+        <p>All clear. Add your first task above.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

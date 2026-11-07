@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Colours used everywhere. Change these to re-theme the whole app */
+        :root {
+            --bg: #0b0d17;
+            --panel: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.09);
+            --text: #eef0ff;
+            --muted: #8b90b0;
+            --purple: #8b5cf6;
+            --pink: #ec4899;
+            --cyan: #22d3ee;
+            --green: #34d399;
+            --red: #f87171;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Plus Jakarta Sans", -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        /* Soft coloured glows floating in the background */
+        body::before, body::after {
+            content: "";
+            position: fixed;
+            width: 520px; height: 520px;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.35;
+            z-index: -1;
+            animation: float 14s ease-in-out infinite alternate;
+        }
+        body::before { background: var(--purple); top: -160px; right: -120px; }
+        body::after  { background: var(--cyan); bottom: -200px; left: 120px; animation-delay: -7s; opacity: 0.2; }
+        @keyframes float {
+            from { transform: translate(0, 0) scale(1); }
+            to   { transform: translate(-60px, 40px) scale(1.15); }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            padding: 28px 18px;
+            border-right: 1px solid var(--border);
+            background: rgba(11, 13, 23, 0.6);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            /* stays in place while the page scrolls, so the quote is always visible */
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 800; font-size: 19px;
+            margin: 0 8px 36px;
+        }
+        .logo-mark {
+            width: 34px; height: 34px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--purple), var(--pink));
+            display: grid; place-items: center;
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+        }
+        .nav-label {
+            font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+            color: var(--muted); margin: 0 12px 10px;
+        }
+        .sidebar a {
+            display: flex; align-items: center; gap: 12px;
+            color: var(--muted);
+            text-decoration: none;
+            padding: 11px 14px;
+            border-radius: 12px;
+            margin-bottom: 4px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .sidebar a:hover { background: var(--panel); color: var(--text); }
+        .sidebar a.active {
+            background: linear-gradient(135deg, rgba(139,92,246,0.25), rgba(236,72,153,0.15));
+            color: var(--text);
+            border: 1px solid rgba(139, 92, 246, 0.35);
+        }
+        .sidebar .soon { opacity: 0.45; pointer-events: none; }
+        .tag {
+            margin-left: auto; font-size: 10px; padding: 2px 8px;
+            border-radius: 20px; background: var(--panel); border: 1px solid var(--border);
+        }
+        .sidebar-foot { margin-top: 16px; font-size: 12px; color: var(--muted); padding: 0 12px; }
+
+        /* Rotating quote widget */
+        .quote-box {
+            margin-top: auto;
+            padding: 18px 16px 14px;
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(139,92,246,0.22), rgba(34,211,238,0.08));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        .quote-box::before {
+            content: "\201C";
+            position: absolute; top: -18px; right: 10px;
+            font-size: 90px; font-family: Georgia, serif;
+            color: rgba(255,255,255,0.08);
+        }
+        .quote-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #c4b5fd; margin-bottom: 8px; }
+        #quote-text { font-size: 14px; line-height: 1.55; font-style: italic; margin: 0 0 10px; transition: opacity 0.5s; }
+        #quote-author { font-size: 12px; font-weight: 700; color: #c4b5fd; transition: opacity 0.5s; }
+        .quote-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+        .quote-actions a { padding: 0; margin: 0; font-size: 12px; display: inline; }
+        .quote-actions a:hover { background: none; }
+        .quote-next {
+            background: rgba(255,255,255,0.08); box-shadow: none;
+            padding: 5px 11px; font-size: 12px; border-radius: 8px;
+        }
+
+        /* Main area */
+        main { flex: 1; padding: 40px 48px; max-width: 1100px; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px 26px;
+            backdrop-filter: blur(16px);
+            margin-bottom: 22px;
+        }
+        h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+        h2 { margin: 0 0 18px; font-size: 18px; }
+        .gradient-text {
+            background: linear-gradient(90deg, var(--purple), var(--pink), var(--cyan));
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .muted { color: var(--muted); }
+        button {
+            font-family: inherit;
+            background: linear-gradient(135deg, var(--purple), var(--pink));
+            color: white;
+            border: none;
+            padding: 12px 22px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px; font-weight: 600;
+            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(236, 72, 153, 0.4); }
+
+        /* Phones: sidebar goes on top */
+        @media (max-width: 760px) {
+            body { flex-direction: column; }
+            .sidebar { position: static; height: auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 18px; }
+            .logo { margin-bottom: 16px; }
+            .sidebar-foot, .nav-label { display: none; }
+            .quote-box { margin-top: 12px; }
+            main { padding: 24px 16px; }
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo"><span class="logo-mark">⚡</span> My Dashboard</div>
+        <div class="nav-label">Menu</div>
+        <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
+        <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
+        <a class="soon" href="#">📅 Calendar <span class="tag">soon</span></a>
+        <a class="soon" href="#">🔔 Alerts <span class="tag">soon</span></a>
+
+        <!-- Rotating quote: changes every 20 seconds, or when you press Next -->
+        {% if all_quotes %}
+        <div class="quote-box">
+            <div class="quote-label">✝ Daily word</div>
+            <p id="quote-text"></p>
+            <div id="quote-author"></div>
+            <div class="quote-actions">
+                <a href="/quotes">Edit quotes</a>
+                <button class="quote-next" onclick="nextQuote()">Next →</button>
+            </div>
+        </div>
+        {% endif %}
+        <div class="sidebar-foot">Built by Anil with Flask</div>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Quotes come from the database via Flask (tojson turns them into a JS list)
+        const quotes = {{ all_quotes | tojson }};
+        let current = {{ quote_start }};
+
+        function showQuote() {
+            const text = document.getElementById("quote-text");
+            const author = document.getElementById("quote-author");
+            if (!text || quotes.length === 0) return;
+            // fade out, swap the words, fade back in
+            text.style.opacity = 0;
+            author.style.opacity = 0;
+            setTimeout(function () {
+                text.textContent = quotes[current].text;
+                author.textContent = quotes[current].author ? "— " + quotes[current].author : "";
+                text.style.opacity = 1;
+                author.style.opacity = 1;
+            }, 400);
+        }
+
+        function nextQuote() {
+            current = (current + 1) % quotes.length;
+            showQuote();
+        }
+
+        showQuote();
+        setInterval(nextQuote, 20000);
+    </script>
+</body>
+</html>
