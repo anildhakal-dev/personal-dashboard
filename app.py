@@ -39,6 +39,30 @@ def setup_database():
             author TEXT
         )
     """)
+    # Uni timetable: one row per weekly class (day 0 = Monday ... 6 = Sunday)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS classes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module TEXT NOT NULL,
+            kind TEXT,
+            day INTEGER NOT NULL,
+            start TEXT NOT NULL,
+            end TEXT NOT NULL,
+            room TEXT
+        )
+    """)
+    # Uni deadlines: assignments and exams
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS deadlines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            module TEXT,
+            kind TEXT DEFAULT 'Assignment',
+            due TEXT NOT NULL,
+            done INTEGER DEFAULT 0
+        )
+    """)
+
     # First run only: fill it with some starter quotes (delete any you don't like)
     count = conn.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
     if count == 0:
@@ -193,6 +217,125 @@ def delete_quote(quote_id):
     conn.commit()
     conn.close()
     return redirect("/quotes")
+
+
+
+# ---------- Uni ----------
+
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+# Each module gets its own colour on the timetable
+COLOURS = ["#8b5cf6", "#ec4899", "#22d3ee", "#34d399", "#fb923c", "#facc15", "#60a5fa", "#f87171"]
+
+
+# Turns a due date into "Today", "in 5 days" etc, plus how urgent it is
+def countdown(due_text):
+    days = (date.fromisoformat(due_text) - date.today()).days
+    if days < 0:
+        label = f"{-days} day{'s' if days != -1 else ''} ago"
+    elif days == 0:
+        label = "Today"
+    elif days == 1:
+        label = "Tomorrow"
+    else:
+        label = f"in {days} days"
+    if days <= 3:
+        urgency = "red"
+    elif days <= 7:
+        urgency = "orange"
+    else:
+        urgency = "grey"
+    return days, label, urgency
+
+
+@app.route("/uni")
+def uni():
+    conn = get_db()
+    classes = conn.execute("SELECT * FROM classes ORDER BY day, start").fetchall()
+    rows = conn.execute("SELECT * FROM deadlines ORDER BY done, due").fetchall()
+    conn.close()
+
+    # Give every module a colour (same module = same colour)
+    modules = sorted(set(c["module"] for c in classes) | set(d["module"] for d in rows if d["module"]))
+    colour_of = {m: COLOURS[i % len(COLOURS)] for i, m in enumerate(modules)}
+
+    # Put classes into a column for each day. Weekends only show if you have classes then
+    week = []
+    for i, day_name in enumerate(DAYS):
+        day_classes = [c for c in classes if c["day"] == i]
+        if i < 5 or day_classes:
+            week.append({"name": day_name, "index": i, "classes": day_classes})
+
+    today_index = date.today().weekday()
+    today_classes = [c for c in classes if c["day"] == today_index]
+
+    deadlines = []
+    for d in rows:
+        days, label, urgency = countdown(d["due"])
+        deadlines.append({
+            "id": d["id"], "title": d["title"], "module": d["module"], "kind": d["kind"],
+            "done": d["done"], "days": days, "label": label, "urgency": urgency,
+            "nice_date": date.fromisoformat(d["due"]).strftime("%a %d %b"),
+        })
+    upcoming = [d for d in deadlines if not d["done"] and d["days"] >= 0]
+    next_exam = next((d for d in upcoming if d["kind"] == "Exam"), None)
+
+    return render_template("uni.html", week=week, days=DAYS, today_index=today_index,
+                           today_classes=today_classes, deadlines=deadlines,
+                           upcoming=upcoming, next_exam=next_exam,
+                           colour_of=colour_of, modules=modules)
+
+
+@app.route("/add-class", methods=["POST"])
+def add_class():
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO classes (module, kind, day, start, end, room) VALUES (?, ?, ?, ?, ?, ?)",
+        (request.form["module"].strip(), request.form["kind"], int(request.form["day"]),
+         request.form["start"], request.form["end"], request.form.get("room", "").strip()),
+    )
+    conn.commit()
+    conn.close()
+    return redirect("/uni")
+
+
+@app.route("/delete-class/<int:class_id>", methods=["POST"])
+def delete_class(class_id):
+    conn = get_db()
+    conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/uni")
+
+
+@app.route("/add-deadline", methods=["POST"])
+def add_deadline():
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO deadlines (title, module, kind, due) VALUES (?, ?, ?, ?)",
+        (request.form["title"].strip(), request.form.get("module", "").strip(),
+         request.form["kind"], request.form["due"]),
+    )
+    conn.commit()
+    conn.close()
+    return redirect("/uni")
+
+
+@app.route("/toggle-deadline/<int:deadline_id>", methods=["POST"])
+def toggle_deadline(deadline_id):
+    conn = get_db()
+    conn.execute("UPDATE deadlines SET done = 1 - done WHERE id = ?", (deadline_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/uni")
+
+
+@app.route("/delete-deadline/<int:deadline_id>", methods=["POST"])
+def delete_deadline(deadline_id):
+    conn = get_db()
+    conn.execute("DELETE FROM deadlines WHERE id = ?", (deadline_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/uni")
 
 
 setup_database()

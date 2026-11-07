@@ -159,6 +159,21 @@
         }
         button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(236, 72, 153, 0.4); }
 
+        /* Form boxes used on every page */
+        .field {
+            font-family: inherit; font-size: 14px;
+            padding: 11px 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            outline: none;
+            color-scheme: dark;
+        }
+        .field:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.2); }
+        .field::placeholder { color: var(--muted); }
+        select.field option { background: #151827; }
+
         /* Phones: sidebar goes on top */
         @media (max-width: 760px) {
             body { flex-direction: column; }
@@ -176,6 +191,7 @@
         <div class="logo"><span class="logo-mark">⚡</span> My Dashboard</div>
         <div class="nav-label">Menu</div>
         <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
+        <a class="{{ 'active' if request.path == '/uni' }}" href="/uni">🎓 Uni</a>
         <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
         <a class="soon" href="#">📅 Calendar <span class="tag">soon</span></a>
         <a class="soon" href="#">🔔 Alerts <span class="tag">soon</span></a>
