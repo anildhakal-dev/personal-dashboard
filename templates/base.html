@@ -191,7 +191,9 @@
         <div class="logo"><span class="logo-mark">⚡</span> My Dashboard</div>
         <div class="nav-label">Menu</div>
         <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
+        <a class="{{ 'active' if request.path == '/brain' }}" href="/brain">🧠 Brain</a>
         <a class="{{ 'active' if request.path == '/uni' }}" href="/uni">🎓 Uni</a>
+        <a class="{{ 'active' if request.path == '/gym' }}" href="/gym">🏋️ Gym</a>
         <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
         <a class="soon" href="#">📅 Calendar <span class="tag">soon</span></a>
         <a class="soon" href="#">🔔 Alerts <span class="tag">soon</span></a>

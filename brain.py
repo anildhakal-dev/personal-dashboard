@@ -1,0 +1,153 @@
+# The dashboard's "brain": gathers everything from your database and asks
+# Claude to plan your day or week. Kept in its own file so app.py stays tidy.
+
+import json
+from datetime import date, datetime, timedelta
+
+import anthropic
+import config   # your secret API key lives in config.py (never on GitHub)
+
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+CATEGORIES = ["uni", "study", "gym", "boxing", "food", "trading", "work", "personal", "rest"]
+
+client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+
+SYSTEM_PROMPT = """You are the planning brain inside Anil's personal dashboard.
+Anil is a final-year university student who also trades, trains at the gym and boxes,
+and is learning to code to build a business. You turn their real timetable, deadlines,
+tasks, gym plan and lifestyle notes into a realistic, time-blocked plan.
+
+How to plan:
+- Fixed things first: uni classes, work shifts, boxing and anything else in "About me". Never overlap them.
+- Spread work for big deadlines across the days before them (break projects into concrete steps),
+  so nothing piles up the week it is due. The nearest deadline gets the most time.
+- Put the planned gym workout on its day, and add meal prep or meals so protein (150-180g) is reachable.
+- Include breaks, travel and a sensible wind-down. A plan Anil can actually follow beats an impressive one.
+- Block titles are short and specific ("Time Series project: run unit root tests", not "Study").
+- Use the "note" field for one helpful detail, or leave it empty.
+
+The quote: pick one Bible verse (quote the KJV wording exactly) or one short quote by a real person
+that fits what this day or week demands. Only use words you are sure are accurate.
+Tips: two or three short, practical tips for this specific plan."""
+
+# The exact shape Claude must reply in, so the page can draw it
+PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "days": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "focus": {"type": "string"},
+                    "blocks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "start": {"type": "string", "description": "HH:MM, 24-hour"},
+                                "end": {"type": "string", "description": "HH:MM, 24-hour"},
+                                "title": {"type": "string"},
+                                "category": {"type": "string", "enum": CATEGORIES},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["start", "end", "title", "category", "note"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["date", "focus", "blocks"],
+                "additionalProperties": False,
+            },
+        },
+        "quote": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}, "source": {"type": "string"}},
+            "required": ["text", "source"],
+            "additionalProperties": False,
+        },
+        "tips": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["headline", "days", "quote", "tips"],
+    "additionalProperties": False,
+}
+
+
+# Writes everything the brain needs to know as plain text
+def build_context(conn, about_me):
+    now = datetime.now()
+    today = date.today()
+    lines = [f"Right now it is {now.strftime('%A %d %B %Y, %H:%M')}.", ""]
+
+    lines.append("ABOUT ME (Anil's own notes):")
+    lines.append(about_me or "(nothing written yet)")
+    lines.append("")
+
+    lines.append("UNI TIMETABLE (repeats every teaching week):")
+    for c in conn.execute("SELECT * FROM classes ORDER BY day, start"):
+        lines.append(f"- {DAYS[c['day']]} {c['start']}-{c['end']}: {c['module']} {c['kind']} ({c['room']})")
+    lines.append("")
+
+    lines.append("UNI DEADLINES AND EXAMS (not done yet):")
+    for d in conn.execute("SELECT * FROM deadlines WHERE done = 0 ORDER BY due"):
+        days_left = (date.fromisoformat(d["due"]) - today).days
+        lines.append(f"- {d['due']} ({days_left} days away): {d['title']} [{d['kind']}, {d['module']}]")
+    lines.append("")
+
+    lines.append("TO-DO LIST (not done yet):")
+    for t in conn.execute("SELECT * FROM tasks WHERE done = 0 ORDER BY due IS NULL, due"):
+        due = f" (due {t['due']})" if t["due"] else ""
+        lines.append(f"- {t['title']}{due}")
+    lines.append("")
+
+    lines.append("GYM WEEK:")
+    plan = {r["day"]: r["workout"] for r in conn.execute("SELECT * FROM gym_plan")}
+    for i in range(7):
+        workout = plan.get(i, "Rest")
+        exercises = [e["name"] for e in conn.execute(
+            "SELECT name FROM exercises WHERE workout = ?", (workout,))]
+        extra = f": {', '.join(exercises)}" if exercises else ""
+        lines.append(f"- {DAYS[i]}: {workout}{extra}")
+    lines.append("")
+
+    eaten = conn.execute("SELECT COALESCE(SUM(protein), 0) FROM protein_log WHERE day = ?",
+                         (today.isoformat(),)).fetchone()[0]
+    lines.append(f"PROTEIN: target 150-180g a day. Eaten so far today: {eaten}g.")
+    return "\n".join(lines)
+
+
+# Asks Claude for the plan. kind is "day" or "week"
+def make_plan(conn, kind, about_me):
+    today = date.today()
+    if kind == "week":
+        last = today + timedelta(days=6)
+        ask = (f"Plan my week: 7 days from {today.isoformat()} to {last.isoformat()}, "
+               "one entry in days for each date.")
+    else:
+        ask = (f"Plan the rest of today ({today.isoformat()}), starting from the current time. "
+               "Exactly one entry in days.")
+
+    response = client.beta.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=16000,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": build_context(conn, about_me) + "\n\n" + ask}],
+        output_config={
+            "effort": "medium",
+            "format": {"type": "json_schema", "schema": PLAN_SCHEMA},
+        },
+        # If Claude ever declines, the API quietly retries on a backup model
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude declined to make this plan. Try again.")
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError("The plan was too long and got cut off. Try again.")
+
+    # Claude's reply is a list of blocks; the plan is in the text block
+    text = next(block.text for block in response.content if block.type == "text")
+    return json.loads(text)

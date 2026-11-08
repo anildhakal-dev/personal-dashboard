@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, redirect
 import sqlite3
 from datetime import date, datetime, timedelta
+import json
+from urllib.parse import quote
 
 app = Flask(__name__)
 DB = "dashboard.db"
@@ -62,6 +64,102 @@ def setup_database():
             done INTEGER DEFAULT 0
         )
     """)
+
+    # Gym: which workout is on which day (0 = Monday)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gym_plan (
+            day INTEGER PRIMARY KEY,
+            workout TEXT NOT NULL
+        )
+    """)
+    # Gym: the exercises in each workout
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS exercises (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workout TEXT NOT NULL,
+            name TEXT NOT NULL,
+            sets_reps TEXT
+        )
+    """)
+    # Gym: every set you log (weight and reps)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gym_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            exercise TEXT NOT NULL,
+            weight REAL,
+            reps INTEGER
+        )
+    """)
+    # Protein: foods you eat often, and what you ate each day
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS foods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            protein INTEGER NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS protein_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            food TEXT NOT NULL,
+            protein INTEGER NOT NULL
+        )
+    """)
+
+    # First run only: your starting gym week, exercises and foods
+    if conn.execute("SELECT COUNT(*) FROM gym_plan").fetchone()[0] == 0:
+        week = ["Push", "Pull", "Legs", "Shoulders & Arms", "Rest", "Boxing", "Rest"]
+        conn.executemany("INSERT INTO gym_plan (day, workout) VALUES (?, ?)", list(enumerate(week)))
+        conn.executemany("INSERT INTO exercises (workout, name, sets_reps) VALUES (?, ?, ?)", [
+            ("Push", "Flat dumbbell press / machine press", "3 × 8-10"),
+            ("Push", "Incline machine press", "3 × 8-10"),
+            ("Push", "Shoulder press", "3 × 8-10"),
+            ("Push", "Lateral raises", "3 × 12-15"),
+            ("Push", "Skull crushers", "3 × 10-12"),
+            ("Push", "Tricep pushdowns", "3 × 10-12"),
+            ("Pull", "Lat pulldown (variation)", "3 × 8-10"),
+            ("Pull", "Compound row", "3 × 8-10"),
+            ("Pull", "Low-to-high variation", "3 × 10-12"),
+            ("Pull", "Preacher curls", "3 × 10-12"),
+            ("Pull", "Hammer curls", "3 × 10-12"),
+            ("Boxing", "1-1 session", "1 hour"),
+        ])
+    if conn.execute("SELECT COUNT(*) FROM foods").fetchone()[0] == 0:
+        conn.executemany("INSERT INTO foods (name, protein) VALUES (?, ?)", [
+            ("Chicken legs (2)", 50),
+            ("Chicken breast (200g)", 60),
+            ("Protein shake", 25),
+            ("Eggs (3)", 18),
+            ("Greek yoghurt (200g)", 20),
+            ("Tuna (1 can)", 25),
+        ])
+
+    # Brain: your "about me" notes, and every plan it makes
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            made_on TEXT NOT NULL,
+            data TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('about_me', ?)
+    """, ("Wake up around 8:00, sleep around 00:00.\n"
+          "I work on Saturdays (write the hours here).\n"
+          "Boxing 1-1 session on Saturdays (write the time here).\n"
+          "I trade the New York session in the afternoons (write the hours here).\n"
+          "Sparring on Wednesdays is on hold while I'm at uni.\n"
+          "I'm learning to code and building my business: 2-3 hours a day.\n"
+          "Faith matters to me.",))
 
     # First run only: fill it with some starter quotes (delete any you don't like)
     count = conn.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
@@ -186,6 +284,16 @@ def inject_quotes():
     quotes = [{"text": r["text"], "author": r["author"] or ""} for r in rows]
     # "Quote of the day": changes every day, cycling through your list
     start = date.today().toordinal() % len(quotes) if quotes else 0
+
+    # If the brain planned today, its hand-picked quote shows first
+    conn = get_db()
+    plan = conn.execute("SELECT data FROM plans WHERE made_on = ? ORDER BY id DESC LIMIT 1",
+                        (date.today().isoformat(),)).fetchone()
+    conn.close()
+    if plan:
+        q = json.loads(plan["data"])["quote"]
+        quotes.insert(0, {"text": q["text"], "author": q["source"]})
+        start = 0
     return {"all_quotes": quotes, "quote_start": start}
 
 
@@ -336,6 +444,209 @@ def delete_deadline(deadline_id):
     conn.commit()
     conn.close()
     return redirect("/uni")
+
+
+
+# ---------- Gym + protein ----------
+
+PROTEIN_MIN = 150
+PROTEIN_MAX = 180
+WORKOUT_OPTIONS = ["Push", "Pull", "Legs", "Shoulders & Arms", "Boxing", "Sparring", "Rest"]
+WORKOUT_ICONS = {"Push": "💪", "Pull": "🏋️", "Legs": "🦵", "Shoulders & Arms": "🔥",
+                 "Boxing": "🥊", "Sparring": "🥊", "Rest": "😴"}
+
+
+@app.route("/gym")
+def gym():
+    today = date.today()
+    # Which day to show: today, unless you clicked another day (?day=2)
+    show_day = request.args.get("day", type=int)
+    if show_day is None:
+        show_day = today.weekday()
+
+    conn = get_db()
+    plan = {r["day"]: r["workout"] for r in conn.execute("SELECT * FROM gym_plan")}
+    workout = plan.get(show_day, "Rest")
+    exercises = conn.execute("SELECT * FROM exercises WHERE workout = ? ORDER BY id", (workout,)).fetchall()
+
+    # Your last logged set for each exercise, so you know what to beat
+    last = {}
+    for ex in exercises:
+        row = conn.execute(
+            "SELECT weight, reps, day FROM gym_log WHERE exercise = ? ORDER BY id DESC LIMIT 1",
+            (ex["name"],)).fetchone()
+        last[ex["name"]] = row
+
+    todays_sets = conn.execute("SELECT * FROM gym_log WHERE day = ? ORDER BY id DESC",
+                               (today.isoformat(),)).fetchall()
+
+    foods = conn.execute("SELECT * FROM foods ORDER BY protein DESC").fetchall()
+    eaten = conn.execute("SELECT * FROM protein_log WHERE day = ? ORDER BY id DESC",
+                         (today.isoformat(),)).fetchall()
+    conn.close()
+
+    protein = sum(e["protein"] for e in eaten)
+    # Ring fills up to the 150g minimum
+    protein_pct = min(100, round(protein / PROTEIN_MIN * 100))
+    if protein >= PROTEIN_MIN:
+        protein_msg = "Target hit 🎉"
+    else:
+        protein_msg = f"{PROTEIN_MIN - protein}g to go"
+
+    week = [{"index": i, "name": DAYS[i][:3], "workout": plan.get(i, "Rest"),
+             "icon": WORKOUT_ICONS.get(plan.get(i, "Rest"), "🏃")} for i in range(7)]
+
+    return render_template("gym.html", week=week, show_day=show_day, today_index=today.weekday(),
+                           day_name=DAYS[show_day], workout=workout,
+                           icon=WORKOUT_ICONS.get(workout, "🏃"), exercises=exercises, last=last,
+                           todays_sets=todays_sets, options=WORKOUT_OPTIONS, foods=foods,
+                           eaten=eaten, protein=protein, protein_pct=protein_pct,
+                           protein_msg=protein_msg, pmin=PROTEIN_MIN, pmax=PROTEIN_MAX)
+
+
+# Change which workout is on a day
+@app.route("/set-workout", methods=["POST"])
+def set_workout():
+    day = int(request.form["day"])
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO gym_plan (day, workout) VALUES (?, ?)",
+                 (day, request.form["workout"]))
+    conn.commit()
+    conn.close()
+    return redirect(f"/gym?day={day}")
+
+
+@app.route("/add-exercise", methods=["POST"])
+def add_exercise():
+    conn = get_db()
+    conn.execute("INSERT INTO exercises (workout, name, sets_reps) VALUES (?, ?, ?)",
+                 (request.form["workout"], request.form["name"].strip(),
+                  request.form.get("sets_reps", "").strip()))
+    conn.commit()
+    conn.close()
+    return redirect(f"/gym?day={request.form['day']}")
+
+
+@app.route("/delete-exercise/<int:ex_id>", methods=["POST"])
+def delete_exercise(ex_id):
+    conn = get_db()
+    conn.execute("DELETE FROM exercises WHERE id = ?", (ex_id,))
+    conn.commit()
+    conn.close()
+    return redirect(f"/gym?day={request.form['day']}")
+
+
+# Log one set (weight + reps) for an exercise
+@app.route("/log-set", methods=["POST"])
+def log_set():
+    conn = get_db()
+    conn.execute("INSERT INTO gym_log (day, exercise, weight, reps) VALUES (?, ?, ?, ?)",
+                 (date.today().isoformat(), request.form["exercise"].strip(),
+                  request.form.get("weight") or None, request.form.get("reps") or None))
+    conn.commit()
+    conn.close()
+    return redirect(f"/gym?day={request.form['day']}")
+
+
+# Log food: either a saved food button or a custom amount
+@app.route("/eat", methods=["POST"])
+def eat():
+    conn = get_db()
+    conn.execute("INSERT INTO protein_log (day, food, protein) VALUES (?, ?, ?)",
+                 (date.today().isoformat(), request.form["food"].strip(), int(request.form["protein"])))
+    # Tick "save as a quick food" to get a button for it next time
+    if request.form.get("save"):
+        conn.execute("INSERT INTO foods (name, protein) VALUES (?, ?)",
+                     (request.form["food"].strip(), int(request.form["protein"])))
+    conn.commit()
+    conn.close()
+    return redirect("/gym")
+
+
+@app.route("/delete-eaten/<int:log_id>", methods=["POST"])
+def delete_eaten(log_id):
+    conn = get_db()
+    conn.execute("DELETE FROM protein_log WHERE id = ?", (log_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/gym")
+
+
+# Meal prep goes straight onto your to-do list on the Home page
+@app.route("/add-prep", methods=["POST"])
+def add_prep():
+    conn = get_db()
+    conn.execute("INSERT INTO tasks (title, due) VALUES (?, ?)",
+                 ("🍗 Prep: " + request.form["what"].strip(), request.form.get("due") or None))
+    conn.commit()
+    conn.close()
+    return redirect("/gym?prep=added")
+
+
+
+# ---------- Brain ----------
+
+CATEGORY_COLOURS = {"uni": "#8b5cf6", "study": "#ec4899", "gym": "#34d399", "boxing": "#f87171",
+                    "food": "#fb923c", "trading": "#facc15", "work": "#60a5fa",
+                    "personal": "#22d3ee", "rest": "#8b90b0"}
+
+
+def latest_plan(conn, kind):
+    row = conn.execute("SELECT * FROM plans WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,)).fetchone()
+    if not row:
+        return None
+    plan = json.loads(row["data"])
+    plan["made_on"] = row["made_on"]
+    # Nice labels for each day, e.g. "Monday 09 Nov"
+    for d in plan["days"]:
+        try:
+            d["label"] = date.fromisoformat(d["date"]).strftime("%A %d %b")
+        except ValueError:
+            d["label"] = d["date"]
+    return plan
+
+
+@app.route("/brain")
+def brain_page():
+    conn = get_db()
+    about_me = conn.execute("SELECT value FROM settings WHERE key = 'about_me'").fetchone()["value"]
+    day_plan = latest_plan(conn, "day")
+    week_plan = latest_plan(conn, "week")
+    conn.close()
+    show = request.args.get("show", "day")
+    return render_template("brain.html", about_me=about_me, day_plan=day_plan, week_plan=week_plan,
+                           show=show, colours=CATEGORY_COLOURS, error=request.args.get("error"),
+                           today=date.today().isoformat(), now=datetime.now().strftime("%H:%M"))
+
+
+# Press "Plan my day" / "Plan my week"
+@app.route("/make-plan", methods=["POST"])
+def make_plan_route():
+    import brain   # only loaded when needed, so the rest works even without an API key
+    kind = request.form["kind"]
+    conn = get_db()
+    about_me = conn.execute("SELECT value FROM settings WHERE key = 'about_me'").fetchone()["value"]
+    try:
+        plan = brain.make_plan(conn, kind, about_me)
+    except Exception as e:   # show any problem on the page instead of crashing
+        conn.close()
+        message = quote(f"{type(e).__name__}: {e}"[:300])
+        return redirect(f"/brain?show={kind}&error={message}")
+    conn.execute("INSERT INTO plans (kind, made_on, data) VALUES (?, ?, ?)",
+                 (kind, date.today().isoformat(), json.dumps(plan)))
+    conn.commit()
+    conn.close()
+    return redirect(f"/brain?show={kind}")
+
+
+@app.route("/about-me", methods=["POST"])
+def save_about_me():
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('about_me', ?)",
+                 (request.form["about_me"],))
+    conn.commit()
+    conn.close()
+    return redirect("/brain")
 
 
 setup_database()
