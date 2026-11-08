@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Dashboard</title>
+    <!-- These make it install like an app on your phone (Add to Home Screen) -->
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="icon" href="/static/icon-192.png">
+    <meta name="theme-color" content="#0b0d17">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Dashboard">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -174,14 +183,26 @@
         .field::placeholder { color: var(--muted); }
         select.field option { background: #151827; }
 
-        /* Phones: sidebar goes on top */
+        /* Phones: logo on top, menu becomes a row of swipeable pills,
+           and the quote moves to the bottom of the page */
         @media (max-width: 760px) {
             body { flex-direction: column; }
-            .sidebar { position: static; height: auto; width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 18px; }
-            .logo { margin-bottom: 16px; }
+            .sidebar { display: contents; }   /* lets us reorder the sidebar's parts */
+            .logo { order: 1; margin: 0; padding: 16px 16px 10px; }
+            .nav {
+                order: 2;
+                display: flex; gap: 8px;
+                overflow-x: auto;
+                padding: 0 16px 12px;
+                border-bottom: 1px solid var(--border);
+                scrollbar-width: none;
+            }
+            .nav::-webkit-scrollbar { display: none; }
+            .nav a { flex-shrink: 0; margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--border); white-space: nowrap; }
+            .nav .soon { display: none; }
+            main { order: 3; padding: 22px 16px; }
+            .quote-box { order: 4; margin: 0 16px 24px; }
             .sidebar-foot, .nav-label { display: none; }
-            .quote-box { margin-top: 12px; }
-            main { padding: 24px 16px; }
         }
     </style>
     {% block extra_style %}{% endblock %}
@@ -190,6 +211,7 @@
     <nav class="sidebar">
         <div class="logo"><span class="logo-mark">⚡</span> My Dashboard</div>
         <div class="nav-label">Menu</div>
+        <div class="nav">
         <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
         <a class="{{ 'active' if request.path == '/brain' }}" href="/brain">🧠 Brain</a>
         <a class="{{ 'active' if request.path == '/uni' }}" href="/uni">🎓 Uni</a>
@@ -197,6 +219,8 @@
         <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
         <a class="soon" href="#">📅 Calendar <span class="tag">soon</span></a>
         <a class="soon" href="#">🔔 Alerts <span class="tag">soon</span></a>
+        <a href="/logout">🚪 Log out</a>
+        </div>
 
         <!-- Rotating quote: changes every 20 seconds, or when you press Next -->
         {% if all_quotes %}

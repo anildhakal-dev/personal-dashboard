@@ -105,7 +105,12 @@
     .empty .big { font-size: 40px; }
 
     @media (max-width: 760px) {
-        .stats { grid-template-columns: 1fr 1fr; }
+        .stats { grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat { padding: 16px; gap: 10px; min-width: 0; }
+        .stat .icon { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
+        .stat .num { font-size: 24px; }
+        .ring { width: 44px; height: 44px; flex-shrink: 0; }
+        .ring::after { width: 34px; height: 34px; font-size: 10px; }
         .add-row { flex-wrap: wrap; }
         .add-row input[type="date"] { flex: 1; }
         h1 { font-size: 26px; }

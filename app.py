@@ -1,11 +1,45 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, session
+from werkzeug.security import check_password_hash
 import sqlite3
 from datetime import date, datetime, timedelta
 import json
 from urllib.parse import quote
 
+import config   # your secrets: API key, secret key, password hash (never on GitHub)
+
 app = Flask(__name__)
+app.secret_key = config.SECRET_KEY
+app.permanent_session_lifetime = timedelta(days=30)   # stay logged in on your phone for 30 days
 DB = "dashboard.db"
+
+
+# ---------- Login ----------
+
+# Runs before every page: if you're not logged in, you go to the login page
+@app.before_request
+def require_login():
+    if request.path in ("/login",) or request.path.startswith("/static/"):
+        return None
+    if not session.get("logged_in"):
+        return redirect("/login")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if check_password_hash(config.PASSWORD_HASH, request.form["password"]):
+            session.permanent = True
+            session["logged_in"] = True
+            return redirect("/")
+        error = "Wrong password"
+    return render_template("login.html", error=error)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 # Opens the database. row_factory lets us write task["title"] instead of task[1]
