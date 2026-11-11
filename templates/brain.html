@@ -1,188 +1,163 @@
-{% extends "base.html" %}
+# The dashboard's "brain": gathers everything from your database and asks
+# Claude to plan your day or week. Kept in its own file so app.py stays tidy.
 
-{% block extra_style %}
-<style>
-    .hero {
-        position: relative; overflow: hidden;
-        padding: 30px 32px;
-        border-radius: 24px;
-        background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(236,72,153,0.18) 60%, rgba(34,211,238,0.15));
-        border: 1px solid rgba(139,92,246,0.35);
-        margin-bottom: 22px;
-    }
-    .hero::after {
-        content: "🧠"; position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
-        font-size: 110px; opacity: 0.18;
-    }
-    .hero h1 { font-size: 32px; }
-    .hero p { color: #d8d4ff; margin: 8px 0 20px; max-width: 520px; }
-    .actions { display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
-    .actions form { margin: 0; }
-    .ghost { background: rgba(255,255,255,0.1); box-shadow: none; border: 1px solid rgba(255,255,255,0.2); }
-    .ghost:hover { background: rgba(255,255,255,0.18); box-shadow: none; }
+import json
+from datetime import date, datetime, timedelta
 
-    /* "Thinking..." overlay while Claude works */
-    #thinking {
-        display: none; position: fixed; inset: 0; z-index: 50;
-        background: rgba(11,13,23,0.85); backdrop-filter: blur(8px);
-        align-items: center; justify-content: center; flex-direction: column; gap: 18px;
-        text-align: center; padding: 20px;
-    }
-    #thinking .orb {
-        width: 90px; height: 90px; border-radius: 50%;
-        background: conic-gradient(var(--purple), var(--pink), var(--cyan), var(--purple));
-        animation: spin 1.4s linear infinite;
-        box-shadow: 0 0 60px rgba(139,92,246,0.6);
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #thinking p { color: var(--muted); margin: 0; }
+import anthropic
+import config   # your secret API key lives in config.py (never on GitHub)
 
-    .error { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35); color: #fca5a5; padding: 14px 18px; border-radius: 14px; margin-bottom: 22px; font-size: 14px; }
+DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+CATEGORIES = ["uni", "study", "gym", "boxing", "food", "trading", "work", "personal", "rest"]
 
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tabs a {
-        text-decoration: none; color: var(--muted); font-weight: 600; font-size: 14px;
-        padding: 9px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border);
-    }
-    .tabs a.on { color: white; border-color: var(--purple); background: rgba(139,92,246,0.22); }
+client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
 
-    .cols { display: grid; grid-template-columns: 1.6fr 1fr; gap: 22px; align-items: start; }
-    .headline { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
-    .made { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+SYSTEM_PROMPT = """You are the planning brain inside Anil's personal dashboard.
+Anil is a final-year university student who also trades, trains at the gym and boxes,
+and is learning to code to build a business. You turn their real timetable, deadlines,
+tasks, gym plan and lifestyle notes into a realistic, time-blocked plan.
 
-    .day-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 22px 0 10px; flex-wrap: wrap; }
-    .day-title:first-of-type { margin-top: 0; }
-    .day-title h3 { margin: 0; font-size: 16px; }
-    .day-title span { font-size: 13px; color: var(--muted); }
+How to plan:
+- Fixed things first: uni classes, work shifts, boxing and anything else in "About me". Never overlap them.
+- Spread work for big deadlines across the days before them (break projects into concrete steps),
+  so nothing piles up the week it is due. The nearest deadline gets the most time.
+- Put the planned gym workout on its day, and add meal prep or meals so protein (150-180g) is reachable.
+- Include breaks, travel and a sensible wind-down. A plan Anil can actually follow beats an impressive one.
+- Block titles are short and specific ("Time Series project: run unit root tests", not "Study").
+- Use the "note" field for one helpful detail, or leave it empty.
 
-    /* Timeline blocks */
-    .block {
-        display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start;
-        padding: 12px 14px; border-radius: 14px; margin-bottom: 8px;
-        background: rgba(255,255,255,0.03);
-        border-left: 4px solid var(--c);
-        transition: transform 0.2s;
-    }
-    .block:hover { transform: translateX(4px); background: rgba(255,255,255,0.06); }
-    .block .time { font-size: 13px; font-weight: 700; color: var(--c); padding-top: 2px; }
-    .block .t { font-weight: 600; }
-    .block .n { font-size: 13px; color: var(--muted); margin-top: 3px; }
-    .block .cat { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--c); margin-left: 6px; }
-    .block.now { background: rgba(139,92,246,0.16); box-shadow: 0 0 0 1px rgba(139,92,246,0.5), 0 0 24px rgba(139,92,246,0.25); }
-    .block.now .time::after { content: " · NOW"; color: white; }
-    .block.past { opacity: 0.45; }
+The quote: pick one Bible verse (quote the KJV wording exactly) or one short quote by a real person
+that fits what this day or week demands. Only use words you are sure are accurate.
+Tips: two or three short, practical tips for this specific plan."""
 
-    .quote-card {
-        padding: 24px; border-radius: 20px; margin-bottom: 22px;
-        background: linear-gradient(160deg, rgba(139,92,246,0.25), rgba(34,211,238,0.08));
-        border: 1px solid rgba(139,92,246,0.3);
-    }
-    .quote-card .lbl { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #c4b5fd; margin-bottom: 10px; }
-    .quote-card p { font-size: 17px; font-style: italic; line-height: 1.55; margin: 0 0 12px; }
-    .quote-card .src { font-weight: 700; color: #c4b5fd; font-size: 14px; }
-    .tips li { margin-bottom: 8px; line-height: 1.5; font-size: 14px; }
-    .tips ul { padding-left: 18px; margin: 0; }
-    textarea.field { width: 100%; min-height: 190px; resize: vertical; line-height: 1.5; }
-    .empty { text-align: center; padding: 40px 10px; color: var(--muted); }
-    .empty .big { font-size: 48px; }
+# The exact shape Claude must reply in, so the page can draw it
+PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "days": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "focus": {"type": "string"},
+                    "blocks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "start": {"type": "string", "description": "HH:MM, 24-hour"},
+                                "end": {"type": "string", "description": "HH:MM, 24-hour"},
+                                "title": {"type": "string"},
+                                "category": {"type": "string", "enum": CATEGORIES},
+                                "note": {"type": "string"},
+                            },
+                            "required": ["start", "end", "title", "category", "note"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["date", "focus", "blocks"],
+                "additionalProperties": False,
+            },
+        },
+        "quote": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}, "source": {"type": "string"}},
+            "required": ["text", "source"],
+            "additionalProperties": False,
+        },
+        "tips": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["headline", "days", "quote", "tips"],
+    "additionalProperties": False,
+}
 
-    @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
-    @media (max-width: 760px) {
-        .hero { padding: 24px 20px; }
-        .hero::after { display: none; }
-        .block { grid-template-columns: 1fr; gap: 4px; }
-    }
-</style>
-{% endblock %}
 
-{% block content %}
-<div id="thinking">
-    <div class="orb"></div>
-    <h2 style="margin:0">Planning…</h2>
-    <p>Reading your timetable, deadlines, gym and to-dos.<br>This takes up to a minute.</p>
-</div>
+# Writes everything the brain needs to know as plain text
+def build_context(conn, about_me):
+    now = datetime.now()
+    today = date.today()
+    lines = [f"Right now it is {now.strftime('%A %d %B %Y, %H:%M')}.", ""]
 
-<div class="hero">
-    <h1>Your <span class="gradient-text">brain</span></h1>
-    <p>Plans your time around uni, deadlines, gym, work and everything in "About me".</p>
-    <div class="actions">
-        <form method="POST" action="/make-plan" onsubmit="thinking()">
-            <input type="hidden" name="kind" value="day">
-            <button type="submit">⚡ Plan my day</button>
-        </form>
-        <form method="POST" action="/make-plan" onsubmit="thinking()">
-            <input type="hidden" name="kind" value="week">
-            <button type="submit" class="ghost">🗓 Plan my week</button>
-        </form>
-    </div>
-</div>
+    lines.append("ABOUT ME (Anil's own notes):")
+    lines.append(about_me or "(nothing written yet)")
+    lines.append("")
 
-{% if error %}<div class="error">⚠️ Something went wrong: {{ error }}</div>{% endif %}
+    lines.append("UNI TIMETABLE (repeats every teaching week):")
+    for c in conn.execute("SELECT * FROM classes ORDER BY day, start"):
+        lines.append(f"- {DAYS[c['day']]} {c['start']}-{c['end']}: {c['module']} {c['kind']} ({c['room']})")
+    lines.append("")
 
-<div class="cols">
-    <div>
-        <div class="tabs">
-            <a href="/brain?show=day" class="{{ 'on' if show == 'day' }}">Today</a>
-            <a href="/brain?show=week" class="{{ 'on' if show == 'week' }}">This week</a>
-        </div>
+    lines.append("UNI DEADLINES AND EXAMS (not done yet):")
+    for d in conn.execute("SELECT * FROM deadlines WHERE done = 0 ORDER BY due"):
+        days_left = (date.fromisoformat(d["due"]) - today).days
+        lines.append(f"- {d['due']} ({days_left} days away): {d['title']} [{d['kind']}, {d['module']}]")
+    lines.append("")
 
-        {% set plan = week_plan if show == 'week' else day_plan %}
-        <div class="card">
-        {% if plan %}
-            <p class="headline">{{ plan.headline }}</p>
-            <div class="made">Made on {{ plan.made_on }} · press the button again any time to re-plan</div>
+    lines.append("TO-DO LIST (not done yet):")
+    for t in conn.execute("SELECT * FROM tasks WHERE done = 0 ORDER BY due IS NULL, due"):
+        due = f" (due {t['due']})" if t["due"] else ""
+        lines.append(f"- {t['title']}{due}")
+    lines.append("")
 
-            {% for d in plan.days %}
-            <div class="day-title"><h3>{{ d.label }}</h3><span>{{ d.focus }}</span></div>
-                {% for b in d.blocks %}
-                {% set is_today = d.date == today %}
-                <div class="block {% if is_today and b.start <= now < b.end %}now{% elif is_today and b.end <= now %}past{% endif %}"
-                     style="--c: {{ colours.get(b.category, '#8b90b0') }}">
-                    <div class="time">{{ b.start }} – {{ b.end }}</div>
-                    <div>
-                        <div class="t">{{ b.title }}<span class="cat">{{ b.category }}</span></div>
-                        {% if b.note %}<div class="n">{{ b.note }}</div>{% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            {% endfor %}
-        {% else %}
-            <div class="empty">
-                <div class="big">🧠</div>
-                <p>No {{ "week" if show == "week" else "day" }} plan yet. Press the button above.</p>
-            </div>
-        {% endif %}
-        </div>
-    </div>
+    lines.append("GYM WEEK:")
+    plan = {r["day"]: r["workout"] for r in conn.execute("SELECT * FROM gym_plan")}
+    for i in range(7):
+        workout = plan.get(i, "Rest")
+        exercises = [e["name"] for e in conn.execute(
+            "SELECT name FROM exercises WHERE workout = ?", (workout,))]
+        extra = f": {', '.join(exercises)}" if exercises else ""
+        lines.append(f"- {DAYS[i]}: {workout}{extra}")
+    lines.append("")
 
-    <div>
-        {% if plan %}
-        <div class="quote-card">
-            <div class="lbl">✝ Picked for {{ "this week" if show == "week" else "today" }}</div>
-            <p>“{{ plan.quote.text }}”</p>
-            <div class="src">— {{ plan.quote.source }}</div>
-        </div>
-        <div class="card tips">
-            <h2>💡 Tips</h2>
-            <ul>{% for t in plan.tips %}<li>{{ t }}</li>{% endfor %}</ul>
-        </div>
-        {% endif %}
+    eaten = conn.execute("SELECT COALESCE(SUM(protein), 0) FROM protein_log WHERE day = ?",
+                         (today.isoformat(),)).fetchone()[0]
+    lines.append(f"PROTEIN: target 150-180g a day. Eaten so far today: {eaten}g.")
+    lines.append("")
 
-        <div class="card">
-            <h2>🙋 About me</h2>
-            <p class="muted" style="font-size:13px;margin:-8px 0 12px">The brain reads this every time. Fill in your real hours.</p>
-            <form method="POST" action="/about-me">
-                <textarea class="field" name="about_me">{{ about_me }}</textarea>
-                <button type="submit" style="margin-top:10px">Save</button>
-            </form>
-        </div>
-    </div>
-</div>
+    # Trading: so the brain can plan around how the week is going
+    monday = (now.date() - timedelta(days=now.weekday())).isoformat()
+    week = conn.execute("SELECT COUNT(*), COALESCE(SUM(pnl), 0), COALESCE(SUM(1 - followed_plan), 0) "
+                        "FROM trades WHERE day >= ?", (monday,)).fetchone()
+    today_pnl = conn.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE day = ?",
+                             (now.date().isoformat(),)).fetchone()[0]
+    lines.append(f"TRADING THIS WEEK: {week[0]} trades, P&L {week[1]:+.2f}, "
+                 f"{week[2]} broke the plan. Today so far: {today_pnl:+.2f}.")
+    return "\n".join(lines)
 
-<script>
-    // Shows the spinning orb while Claude works
-    function thinking() {
-        document.getElementById("thinking").style.display = "flex";
-    }
-</script>
-{% endblock %}
+
+# Asks Claude for the plan. kind is "day" or "week"
+def make_plan(conn, kind, about_me):
+    today = date.today()
+    if kind == "week":
+        last = today + timedelta(days=6)
+        ask = (f"Plan my week: 7 days from {today.isoformat()} to {last.isoformat()}, "
+               "one entry in days for each date.")
+    else:
+        ask = (f"Plan the rest of today ({today.isoformat()}), starting from the current time. "
+               "Exactly one entry in days.")
+
+    response = client.beta.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=16000,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": build_context(conn, about_me) + "\n\n" + ask}],
+        output_config={
+            "effort": "medium",
+            "format": {"type": "json_schema", "schema": PLAN_SCHEMA},
+        },
+        # If Claude ever declines, the API quietly retries on a backup model
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+    )
+
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude declined to make this plan. Try again.")
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError("The plan was too long and got cut off. Try again.")
+
+    # Claude's reply is a list of blocks; the plan is in the text block
+    text = next(block.text for block in response.content if block.type == "text")
+    return json.loads(text)

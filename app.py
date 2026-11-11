@@ -170,6 +170,33 @@ def setup_database():
             ("Tuna (1 can)", 25),
         ])
 
+    # Trading journal: every trade you take
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            instrument TEXT NOT NULL,
+            direction TEXT,
+            pnl REAL NOT NULL,
+            rr REAL,
+            account TEXT,
+            setup TEXT,
+            followed_plan INTEGER DEFAULT 1,
+            notes TEXT
+        )
+    """)
+    # Prop firm money: eval/reset/activation fees you pay, and payouts you get
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS prop_money (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            firm TEXT,
+            amount REAL NOT NULL,
+            note TEXT
+        )
+    """)
+
     # Brain: your "about me" notes, and every plan it makes
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -615,6 +642,152 @@ def add_prep():
     conn.commit()
     conn.close()
     return redirect("/gym?prep=added")
+
+
+
+# ---------- Trading journal ----------
+
+CURRENCY = "$"   # prop firms pay in dollars. Change to "£" if you prefer
+FEE_KINDS = ["Eval fee", "Reset fee", "Activation fee", "Other cost"]
+
+
+def money(x):
+    """Turns 125.5 into +$125.50 and -40 into -$40.00"""
+    sign = "+" if x > 0 else ("-" if x < 0 else "")
+    return f"{sign}{CURRENCY}{abs(x):,.2f}"
+
+
+@app.route("/trading")
+def trading():
+    today = date.today()
+    # Which month the calendar shows: this month, unless you pressed the arrows (?month=2026-10)
+    month_text = request.args.get("month") or today.strftime("%Y-%m")
+    first = date.fromisoformat(month_text + "-01")
+    prev_month = (first - timedelta(days=1)).strftime("%Y-%m")
+    next_month = (first + timedelta(days=32)).strftime("%Y-%m")
+
+    conn = get_db()
+    trades = conn.execute("SELECT * FROM trades ORDER BY day DESC, id DESC").fetchall()
+    prop = conn.execute("SELECT * FROM prop_money ORDER BY day DESC, id DESC").fetchall()
+    conn.close()
+
+    # Add up P&L and trade count for each day
+    by_day = {}
+    for t in trades:
+        d = by_day.setdefault(t["day"], {"pnl": 0, "count": 0})
+        d["pnl"] += t["pnl"]
+        d["count"] += 1
+
+    def total_between(start, end):
+        return sum(v["pnl"] for k, v in by_day.items() if start.isoformat() <= k <= end.isoformat())
+
+    week_start = today - timedelta(days=today.weekday())   # this Monday
+    today_pnl = by_day.get(today.isoformat(), {"pnl": 0})["pnl"]
+    week_pnl = total_between(week_start, today)
+    month_pnl = total_between(today.replace(day=1), today)
+    all_pnl = sum(t["pnl"] for t in trades)
+
+    wins = [t for t in trades if t["pnl"] > 0]
+    losses = [t for t in trades if t["pnl"] < 0]
+    win_rate = round(len(wins) / len(trades) * 100) if trades else 0
+    avg_win = sum(t["pnl"] for t in wins) / len(wins) if wins else 0
+    avg_loss = sum(t["pnl"] for t in losses) / len(losses) if losses else 0
+    plan_rate = round(sum(t["followed_plan"] for t in trades) / len(trades) * 100) if trades else 0
+
+    # Calendar: rows of Mon-Sun, with the week's total at the end of each row
+    weeks = []
+    day = first - timedelta(days=first.weekday())   # Monday on or before the 1st
+    while day.month == first.month or day < first:
+        row = {"days": [], "total": 0, "count": 0}
+        for _ in range(7):
+            info = by_day.get(day.isoformat())
+            row["days"].append({
+                "num": day.day,
+                "in_month": day.month == first.month,
+                "is_today": day == today,
+                "pnl": info["pnl"] if info else None,
+                "count": info["count"] if info else 0,
+            })
+            if info:
+                row["total"] += info["pnl"]
+                row["count"] += info["count"]
+            day += timedelta(days=1)
+        weeks.append(row)
+
+    # Bar chart: the last 14 days that had trades, oldest first
+    recent_days = sorted(by_day.items())[-14:]
+    biggest = max([abs(v["pnl"]) for k, v in recent_days] or [1]) or 1
+    bars = [{"label": date.fromisoformat(k).strftime("%d/%m"), "pnl": v["pnl"],
+             "height": round(abs(v["pnl"]) / biggest * 100)} for k, v in recent_days]
+
+    # Prop firm money: total spent vs total paid out
+    spent = sum(p["amount"] for p in prop if p["kind"] != "Payout")
+    paid = sum(p["amount"] for p in prop if p["kind"] == "Payout")
+
+    # Names you've used before, so the boxes can suggest them
+    instruments = sorted({t["instrument"] for t in trades}) or ["NQ", "MNQ", "ES", "MES", "GC"]
+    accounts = sorted({t["account"] for t in trades if t["account"]})
+    firms = sorted({p["firm"] for p in prop if p["firm"]})
+
+    return render_template("trading.html", trades=trades[:15], prop=prop[:20], money=money,
+                           today_pnl=today_pnl, week_pnl=week_pnl, month_pnl=month_pnl,
+                           all_pnl=all_pnl, win_rate=win_rate, avg_win=avg_win, avg_loss=avg_loss,
+                           plan_rate=plan_rate, trade_count=len(trades), weeks=weeks,
+                           month_name=first.strftime("%B %Y"), prev_month=prev_month,
+                           next_month=next_month, bars=bars, spent=spent, paid=paid,
+                           instruments=instruments, accounts=accounts, firms=firms,
+                           fee_kinds=FEE_KINDS, today=today.isoformat(), currency=CURRENCY)
+
+
+# Log a trade. A loss is typed as a minus number, e.g. -150
+@app.route("/add-trade", methods=["POST"])
+def add_trade():
+    conn = get_db()
+    conn.execute("""INSERT INTO trades (day, instrument, direction, pnl, rr, account, setup, followed_plan, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 (request.form.get("day") or date.today().isoformat(),
+                  request.form["instrument"].strip().upper(),
+                  request.form.get("direction"),
+                  float(request.form["pnl"]),
+                  request.form.get("rr") or None,
+                  request.form.get("account", "").strip(),
+                  request.form.get("setup", "").strip(),
+                  1 if request.form.get("followed_plan") else 0,
+                  request.form.get("notes", "").strip()))
+    conn.commit()
+    conn.close()
+    return redirect("/trading")
+
+
+@app.route("/delete-trade/<int:trade_id>", methods=["POST"])
+def delete_trade(trade_id):
+    conn = get_db()
+    conn.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/trading")
+
+
+# Log an eval fee, reset, or payout (always typed as a positive number)
+@app.route("/add-prop", methods=["POST"])
+def add_prop():
+    conn = get_db()
+    conn.execute("INSERT INTO prop_money (day, kind, firm, amount, note) VALUES (?, ?, ?, ?, ?)",
+                 (request.form.get("day") or date.today().isoformat(), request.form["kind"],
+                  request.form.get("firm", "").strip(), abs(float(request.form["amount"])),
+                  request.form.get("note", "").strip()))
+    conn.commit()
+    conn.close()
+    return redirect("/trading#prop")
+
+
+@app.route("/delete-prop/<int:prop_id>", methods=["POST"])
+def delete_prop(prop_id):
+    conn = get_db()
+    conn.execute("DELETE FROM prop_money WHERE id = ?", (prop_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/trading#prop")
 
 
 
