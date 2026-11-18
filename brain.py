@@ -90,6 +90,11 @@ def build_context(conn, about_me):
         lines.append(f"- {DAYS[c['day']]} {c['start']}-{c['end']}: {c['module']} {c['kind']} ({c['room']})")
     lines.append("")
 
+    # Calendar: uni, commutes and anything Anil has booked (planner.py)
+    import planner
+    lines.extend(planner.brain_lines(conn))
+    lines.append("")
+
     lines.append("UNI DEADLINES AND EXAMS (not done yet):")
     for d in conn.execute("SELECT * FROM deadlines WHERE done = 0 ORDER BY due"):
         days_left = (date.fromisoformat(d["due"]) - today).days
@@ -115,6 +120,16 @@ def build_context(conn, about_me):
     eaten = conn.execute("SELECT COALESCE(SUM(protein), 0) FROM protein_log WHERE day = ?",
                          (today.isoformat(),)).fetchone()[0]
     lines.append(f"PROTEIN: target 150-180g a day. Eaten so far today: {eaten}g.")
+    lines.append("")
+
+    # Trading: so the brain can plan around how the week is going
+    monday = (now.date() - timedelta(days=now.weekday())).isoformat()
+    week = conn.execute("SELECT COUNT(*), COALESCE(SUM(pnl), 0), COALESCE(SUM(1 - followed_plan), 0) "
+                        "FROM trades WHERE day >= ?", (monday,)).fetchone()
+    today_pnl = conn.execute("SELECT COALESCE(SUM(pnl), 0) FROM trades WHERE day = ?",
+                             (now.date().isoformat(),)).fetchone()[0]
+    lines.append(f"TRADING THIS WEEK: {week[0]} trades, P&L {week[1]:+.2f}, "
+                 f"{week[2]} broke the plan. Today so far: {today_pnl:+.2f}.")
     return "\n".join(lines)
 
 

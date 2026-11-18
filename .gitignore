@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 config.py
 timetable.csv
+config.py
+timetable.csv

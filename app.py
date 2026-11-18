@@ -197,6 +197,72 @@ def setup_database():
         )
     """)
 
+    # Money: every bank transaction (spending is negative, money in is positive)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day TEXT NOT NULL,
+            description TEXT NOT NULL,
+            merchant TEXT,
+            amount REAL NOT NULL,
+            balance REAL,
+            category TEXT,
+            UNIQUE (day, description, amount, balance)
+        )
+    """)
+    # Money: shops you've taught it ("ULTRAFLEX" -> Gym & boxing), so it remembers
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS merchant_rules (
+            merchant TEXT PRIMARY KEY,
+            category TEXT NOT NULL
+        )
+    """)
+    # Money: things you're saving for
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS goals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            target REAL NOT NULL,
+            saved REAL DEFAULT 0,
+            by_date TEXT
+        )
+    """)
+    # Money: the brain's monthly reviews
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS money_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            month TEXT NOT NULL,
+            made_on TEXT NOT NULL,
+            data TEXT NOT NULL
+        )
+    """)
+    # Money: your chat with the coach about each month's review
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS money_chat (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            month TEXT NOT NULL,
+            role TEXT NOT NULL,
+            text TEXT NOT NULL,
+            made_on TEXT NOT NULL
+        )
+    """)
+    # Money: lasting facts the coach picked up from your chats (used every month)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS money_facts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fact TEXT NOT NULL,
+            added_on TEXT NOT NULL
+        )
+    """)
+    # First run only: your goals (edit them on the Money page)
+    if conn.execute("SELECT COUNT(*) FROM goals").fetchone()[0] == 0:
+        conn.executemany("INSERT INTO goals (name, target, saved, by_date) VALUES (?, ?, 0, ?)", [
+            ("🛟 Emergency fund", 3000, "2027-08-31"),
+            ("💼 Business software", 3000, "2027-03-31"),
+            ("🚗 BMW", 45000, "2028-05-31"),
+            ("🏡 House deposit (10% of £350k)", 35000, "2030-11-30"),
+        ])
+
     # Brain: your "about me" notes, and every plan it makes
     conn.execute("""
         CREATE TABLE IF NOT EXISTS settings (
@@ -221,6 +287,20 @@ def setup_database():
           "Sparring on Wednesdays is on hold while I'm at uni.\n"
           "I'm learning to code and building my business: 2-3 hours a day.\n"
           "Faith matters to me.",))
+
+    conn.execute("""
+        INSERT OR IGNORE INTO settings (key, value) VALUES ('money_profile', ?)
+    """, ("Income: restaurant wages about £1,000 a month. Student loan £3,350 each semester. "
+          "Trading payouts average about £1,000 a month but are not guaranteed.\n"
+          "Fixed costs: £734 a month paying off last year's rent until February 2027, then no rent.\n"
+          "Subscriptions: Disney+, Amazon Prime, Strava, Spotify, YouTube Premium (maybe more).\n"
+          "Two gym memberships: Foundry about £36 a month and Ultraflex about £56 a month.\n"
+          "Prop firm fees average about £500 a month, all paid from Nationwide.\n"
+          "No debt, no credit cards, no car finance. Only one account (Nationwide).\n"
+          "Savings right now: (write how much and where)\n"
+          "Untouchable: boxing, £150 for 4 1-1 sessions plus weekly sparring.\n"
+          "Goals: a house within 4 years (£300k-£400k), a BMW within 1.5 years (about £45k), "
+          "and starting a business that needs a few thousand for software.",))
 
     # First run only: fill it with some starter quotes (delete any you don't like)
     count = conn.execute("SELECT COUNT(*) FROM quotes").fetchone()[0]
@@ -791,6 +871,370 @@ def delete_prop(prop_id):
 
 
 
+# ---------- Money ----------
+
+import finance   # CSV reading, categories and the money coach (finance.py)
+
+
+def month_summary(conn, month):
+    """Totals for one month ('2026-11'): spending by category, income by category, etc."""
+    rows = conn.execute("SELECT * FROM transactions WHERE substr(day, 1, 7) = ?", (month,)).fetchall()
+    spend, income = {}, {}
+    saved = 0
+    for r in rows:
+        cat = r["category"] or "Other"
+        if cat == "Transfer":
+            continue
+        if cat == "Savings":
+            saved -= r["amount"]          # money moved into savings counts as saved
+        elif r["amount"] < 0:
+            spend[cat] = spend.get(cat, 0) + -r["amount"]
+        else:
+            income[cat] = income.get(cat, 0) + r["amount"]
+    return {"rows": rows, "spend": spend, "income": income, "saved": saved,
+            "spent": sum(spend.values()), "money_in": sum(income.values())}
+
+
+def goal_rows(conn):
+    goals = []
+    today = date.today()
+    for g in conn.execute("SELECT * FROM goals ORDER BY by_date IS NULL, by_date"):
+        left = max(0, g["target"] - g["saved"])
+        months = None
+        per_month = None
+        if g["by_date"]:
+            end = date.fromisoformat(g["by_date"])
+            months = max(1, (end.year - today.year) * 12 + end.month - today.month)
+            per_month = left / months
+        goals.append({"id": g["id"], "name": g["name"], "target": g["target"], "saved": g["saved"],
+                      "by_date": g["by_date"], "left": left, "months": months, "per_month": per_month,
+                      "pct": min(100, round(g["saved"] / g["target"] * 100)) if g["target"] else 0,
+                      "label": date.fromisoformat(g["by_date"]).strftime("%b %Y") if g["by_date"] else ""})
+    return goals
+
+
+@app.route("/money")
+def money_page():
+    conn = get_db()
+    months = [r[0] for r in conn.execute(
+        "SELECT DISTINCT substr(day, 1, 7) FROM transactions ORDER BY 1 DESC")]
+    month = request.args.get("month") or (months[0] if months else date.today().strftime("%Y-%m"))
+    this = month_summary(conn, month)
+    prev_key = (date.fromisoformat(month + "-01") - timedelta(days=1)).strftime("%Y-%m")
+    prev = month_summary(conn, prev_key)
+
+    # Donut chart slices, biggest first, with the change vs last month
+    slices, start = [], 0
+    for cat, amount in sorted(this["spend"].items(), key=lambda kv: -kv[1]):
+        pct = amount / this["spent"] * 100 if this["spent"] else 0
+        before = prev["spend"].get(cat)
+        slices.append({"cat": cat, "amount": amount, "pct": round(pct), "start": start, "end": start + pct,
+                       "colour": finance.CATEGORY_COLOURS.get(cat, "#8b90b0"),
+                       "change": (amount - before) if before is not None and prev["spent"] else None})
+        start += pct
+
+    spending = [r for r in this["rows"] if r["amount"] < 0 and r["category"] not in ("Transfer", "Savings")]
+    biggest = sorted(spending, key=lambda r: r["amount"])[:8]
+    # Subscriptions: one line per service with what it cost this month
+    subs = {}
+    for r in spending:
+        if r["category"] == "Subscriptions":
+            subs[r["merchant"]] = subs.get(r["merchant"], 0) + -r["amount"]
+    subs = sorted(subs.items(), key=lambda kv: -kv[1])
+
+    show_cat = request.args.get("cat")
+    txns = [r for r in this["rows"] if not show_cat or (r["category"] or "Other") == show_cat]
+    txns = sorted(txns, key=lambda r: (r["day"], r["id"]), reverse=True)
+
+    review_row = conn.execute("SELECT * FROM money_reviews WHERE month = ? ORDER BY id DESC LIMIT 1",
+                              (month,)).fetchone()
+    review = json.loads(review_row["data"]) if review_row else None
+    profile = conn.execute("SELECT value FROM settings WHERE key = 'money_profile'").fetchone()["value"]
+    goals = goal_rows(conn)
+    chat = conn.execute("SELECT * FROM money_chat WHERE month = ? ORDER BY id", (month,)).fetchall()
+    facts = conn.execute("SELECT * FROM money_facts ORDER BY id").fetchall()
+    conn.close()
+
+    fees = this["spend"].get("Trading (prop fees)", 0)
+    payouts = this["income"].get("Trading payouts", 0)
+    left_over = this["money_in"] - this["spent"]
+    return render_template(
+        "money.html", months=months, month=month,
+        month_name=date.fromisoformat(month + "-01").strftime("%B %Y"),
+        this=this, prev=prev, slices=slices, biggest=biggest, subs=subs, txns=txns,
+        show_cat=show_cat, review=review, review_date=review_row["made_on"] if review_row else None,
+        profile=profile, goals=goals, chat=chat, facts=facts, fees=fees, payouts=payouts, left_over=left_over,
+        save_rate=round(left_over / this["money_in"] * 100) if this["money_in"] else 0,
+        categories=finance.ALL_CATEGORIES, colours=finance.CATEGORY_COLOURS,
+        added=request.args.get("added"), error=request.args.get("error"),
+        regraded=request.args.get("regraded"),
+        today=date.today().isoformat())
+
+
+# Upload a bank statement CSV. Re-uploading the same file won't double count
+@app.route("/upload-statement", methods=["POST"])
+def upload_statement():
+    file = request.files.get("statement")
+    if not file or not file.filename:
+        return redirect("/money?error=" + quote("Pick a CSV or PDF file first"))
+    raw = file.read()
+    try:
+        if file.filename.lower().endswith(".pdf"):
+            found = finance.read_pdf_statement(raw)   # Claude reads the PDF for you
+        else:
+            found = finance.read_statement(raw)
+    except Exception as e:
+        return redirect("/money?error=" + quote(f"{type(e).__name__}: {e}"[:300]))
+
+    conn = get_db()
+    learned = {r["merchant"]: r["category"] for r in conn.execute("SELECT * FROM merchant_rules")}
+    added = []
+    for t in found:
+        merchant = finance.merchant_key(t["description"])
+        category = learned.get(merchant) or finance.rule_category(t["description"], t["amount"])
+        cur = conn.execute("""INSERT OR IGNORE INTO transactions (day, description, merchant, amount, balance, category)
+                              VALUES (?, ?, ?, ?, ?, ?)""",
+                           (t["day"], t["description"], merchant, t["amount"], t["balance"], category))
+        if cur.rowcount and not category:
+            added.append((cur.lastrowid, merchant, "in" if t["amount"] > 0 else "out", t["description"]))
+
+    conn.commit()   # save now, so the database isn't left waiting while Claude thinks
+
+    # Shops it doesn't know yet: ask Claude once for all of them, then remember the answers
+    if added:
+        unknown = {}
+        for _, merchant, direction, example in added:
+            unknown.setdefault((merchant, direction), example)
+        try:
+            answers = finance.ai_categorise([(m, d, ex) for (m, d), ex in unknown.items()])
+        except Exception:
+            answers = {}   # no internet / no key: they go to Other and you can fix them by hand
+        for row_id, merchant, direction, _ in added:
+            category = answers.get(merchant) or ("Other income" if direction == "in" else "Other")
+            conn.execute("UPDATE transactions SET category = ? WHERE id = ?", (category, row_id))
+            if merchant in answers:
+                conn.execute("INSERT OR IGNORE INTO merchant_rules (merchant, category) VALUES (?, ?)",
+                             (merchant, category))
+    conn.commit()
+    conn.close()
+    latest = max((t["day"][:7] for t in found), default=date.today().strftime("%Y-%m"))
+    return redirect(f"/money?month={latest}&added={len(found)}")
+
+
+# Fix a category: changes every transaction from that shop and remembers it
+@app.route("/set-category/<int:txn_id>", methods=["POST"])
+def set_category(txn_id):
+    category = request.form["category"]
+    conn = get_db()
+    row = conn.execute("SELECT merchant, day FROM transactions WHERE id = ?", (txn_id,)).fetchone()
+    if row:
+        conn.execute("UPDATE transactions SET category = ? WHERE merchant = ?", (category, row["merchant"]))
+        conn.execute("INSERT OR REPLACE INTO merchant_rules (merchant, category) VALUES (?, ?)",
+                     (row["merchant"], category))
+    conn.commit()
+    conn.close()
+    return redirect(f"/money?month={row['day'][:7] if row else ''}#txns")
+
+
+# Remove a month's transactions (if you uploaded the wrong file)
+@app.route("/clear-month", methods=["POST"])
+def clear_month():
+    conn = get_db()
+    conn.execute("DELETE FROM transactions WHERE substr(day, 1, 7) = ?", (request.form["month"],))
+    conn.commit()
+    conn.close()
+    return redirect("/money")
+
+
+@app.route("/add-goal", methods=["POST"])
+def add_goal():
+    conn = get_db()
+    conn.execute("INSERT INTO goals (name, target, saved, by_date) VALUES (?, ?, ?, ?)",
+                 (request.form["name"].strip(), float(request.form["target"]),
+                  float(request.form.get("saved") or 0), request.form.get("by_date") or None))
+    conn.commit()
+    conn.close()
+    return redirect("/money#goals")
+
+
+@app.route("/update-goal/<int:goal_id>", methods=["POST"])
+def update_goal(goal_id):
+    conn = get_db()
+    conn.execute("UPDATE goals SET saved = ?, target = ?, by_date = ? WHERE id = ?",
+                 (float(request.form.get("saved") or 0), float(request.form["target"]),
+                  request.form.get("by_date") or None, goal_id))
+    conn.commit()
+    conn.close()
+    return redirect("/money#goals")
+
+
+@app.route("/delete-goal/<int:goal_id>", methods=["POST"])
+def delete_goal(goal_id):
+    conn = get_db()
+    conn.execute("DELETE FROM goals WHERE id = ?", (goal_id,))
+    conn.commit()
+    conn.close()
+    return redirect("/money#goals")
+
+
+@app.route("/money-profile", methods=["POST"])
+def save_money_profile():
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('money_profile', ?)",
+                 (request.form["profile"],))
+    conn.commit()
+    conn.close()
+    return redirect("/money#about")
+
+
+def money_context(conn, month):
+    """Everything the coach needs to know about one month, as text"""
+    this = month_summary(conn, month)
+    prev_key = (date.fromisoformat(month + "-01") - timedelta(days=1)).strftime("%Y-%m")
+    prev = month_summary(conn, prev_key)
+    profile = conn.execute("SELECT value FROM settings WHERE key = 'money_profile'").fetchone()["value"]
+    facts = [r["fact"] for r in conn.execute("SELECT fact FROM money_facts ORDER BY id")]
+    goals = goal_rows(conn)
+
+    def lines(totals):
+        return "\n".join(f"- {k}: £{v:,.2f}" for k, v in sorted(totals.items(), key=lambda kv: -kv[1])) or "- (none)"
+
+    shops = {}
+    for r in this["rows"]:
+        if r["amount"] < 0 and r["category"] not in ("Transfer", "Savings"):
+            key = (r["merchant"], r["category"])
+            shops[key] = shops.get(key, [0, 0])
+            shops[key][0] += -r["amount"]
+            shops[key][1] += 1
+    top = sorted(shops.items(), key=lambda kv: -kv[1][0])[:25]
+
+    return f"""Today is {date.today().isoformat()}. The month is {month}.
+
+ABOUT MY MONEY (Anil's own notes):
+{profile}
+
+THINGS YOU LEARNED FROM EARLIER CHATS (still true):
+""" + ("\n".join(f"- {f}" for f in facts) or "- (nothing yet)") + f"""
+
+THIS MONTH, MONEY IN (£{this['money_in']:,.2f} total):
+{lines(this['income'])}
+
+THIS MONTH, SPENDING (£{this['spent']:,.2f} total):
+{lines(this['spend'])}
+
+Moved into savings this month: £{this['saved']:,.2f}
+
+LAST MONTH ({prev_key}) SPENDING (£{prev['spent']:,.2f} total):
+{lines(prev['spend'])}
+
+WHERE THE MONEY WENT (shop, category, total, number of payments):
+""" + "\n".join(f"- {m} [{c}]: £{v[0]:,.2f} ({v[1]}x)" for (m, c), v in top) + """
+
+GOALS:
+""" + "\n".join(f"- {g['name']}: target £{g['target']:,.0f}, saved £{g['saved']:,.0f}, "
+                f"by {g['by_date'] or 'no date'}"
+                + (f", needs £{g['per_month']:,.0f} a month for {g['months']} months" if g['per_month'] else "")
+                for g in goals)
+
+
+def chat_text(conn, month):
+    """This month's chat so far, as text"""
+    rows = conn.execute("SELECT role, text FROM money_chat WHERE month = ? ORDER BY id", (month,)).fetchall()
+    return "\n".join(f"{'Anil' if r['role'] == 'me' else 'Coach'}: {r['text']}" for r in rows)
+
+
+def run_review(conn, month):
+    """Asks the coach for a review (taking this month's chat into account) and saves it"""
+    context = money_context(conn, month)
+    talk = chat_text(conn, month)
+    if talk:
+        context += ("\n\nWHAT ANIL TOLD YOU IN CHAT ABOUT THIS MONTH (use it: it is context "
+                    "the bank data can't show, and it should change the grade if it matters):\n" + talk)
+    review = finance.ai_review(context + "\n\nReview this month.")
+    conn.execute("INSERT INTO money_reviews (month, made_on, data) VALUES (?, ?, ?)",
+                 (month, date.today().isoformat(), json.dumps(review)))
+    conn.commit()
+
+
+# Press "Review my month": the brain reads the month, your goals, your notes and your chat
+@app.route("/money-review", methods=["POST"])
+def money_review():
+    month = request.form["month"]
+    conn = get_db()
+    try:
+        run_review(conn, month)
+    except Exception as e:
+        conn.close()
+        return redirect(f"/money?month={month}&error=" + quote(f"{type(e).__name__}: {e}"[:300]) + "#review")
+    conn.close()
+    return redirect(f"/money?month={month}#review")
+
+
+# Talk it through: you say something, the coach answers, remembers lasting facts,
+# and redoes the review if what you said changes the picture
+@app.route("/money-chat", methods=["POST"])
+def money_chat():
+    month = request.form["month"]
+    message = request.form["message"].strip()
+    if not message:
+        return redirect(f"/money?month={month}#coach")
+    conn = get_db()
+    review = conn.execute("SELECT data FROM money_reviews WHERE month = ? ORDER BY id DESC LIMIT 1",
+                          (month,)).fetchone()
+    context = money_context(conn, month)
+    context += "\n\nYOUR CURRENT REVIEW OF THIS MONTH:\n" + (review["data"] if review else "(no review yet)")
+    talk = chat_text(conn, month)
+    if talk:
+        context += "\n\nOUR CHAT SO FAR:\n" + talk
+    context += "\n\nANIL NOW SAYS:\n" + message
+    try:
+        answer = finance.ai_chat(context)
+    except Exception as e:
+        conn.close()
+        return redirect(f"/money?month={month}&error=" + quote(f"{type(e).__name__}: {e}"[:300]) + "#coach")
+
+    today = date.today().isoformat()
+    conn.execute("INSERT INTO money_chat (month, role, text, made_on) VALUES (?, 'me', ?, ?)", (month, message, today))
+    conn.execute("INSERT INTO money_chat (month, role, text, made_on) VALUES (?, 'coach', ?, ?)",
+                 (month, answer["reply"], today))
+    for fact in answer["remember"]:
+        if fact.strip():
+            conn.execute("INSERT INTO money_facts (fact, added_on) VALUES (?, ?)", (fact.strip(), today))
+    conn.commit()
+
+    jump = "#coach"
+    if answer["regrade"] and month_summary(conn, month)["rows"]:
+        try:
+            run_review(conn, month)
+            jump = "#review"
+        except Exception:
+            pass   # the chat reply is saved; press "Review again" to retry
+    conn.close()
+    return redirect(f"/money?month={month}&regraded={1 if jump == '#review' else ''}{jump}")
+
+
+# Start this month's chat again
+@app.route("/clear-chat", methods=["POST"])
+def clear_chat():
+    month = request.form["month"]
+    conn = get_db()
+    conn.execute("DELETE FROM money_chat WHERE month = ?", (month,))
+    conn.commit()
+    conn.close()
+    return redirect(f"/money?month={month}#coach")
+
+
+# Forget a fact the coach remembered (or fix it by typing it into About my money)
+@app.route("/delete-fact/<int:fact_id>", methods=["POST"])
+def delete_fact(fact_id):
+    conn = get_db()
+    conn.execute("DELETE FROM money_facts WHERE id = ?", (fact_id,))
+    conn.commit()
+    conn.close()
+    return redirect(f"/money?month={request.form.get('month', '')}#coach")
+
+
+
 # ---------- Brain ----------
 
 CATEGORY_COLOURS = {"uni": "#8b5cf6", "study": "#ec4899", "gym": "#34d399", "boxing": "#f87171",
@@ -854,6 +1298,11 @@ def save_about_me():
     conn.commit()
     conn.close()
     return redirect("/brain")
+
+
+# ---------- Calendar (planner.py) ----------
+import planner
+app.register_blueprint(planner.bp)
 
 
 setup_database()
