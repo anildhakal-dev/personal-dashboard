@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .top-bar { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    .months { display: flex; gap: 8px; flex-wrap: wrap; }
+    .months a {
+        text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 600;
+        padding: 7px 13px; border-radius: 20px; background: var(--panel); border: 1px solid var(--border);
+    }
+    .months a.on { color: var(--text); border-color: var(--purple); background: rgba(212,160,23,0.22); }
+    .upload { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+    .upload input[type=file] { font-family: inherit; font-size: 13px; color: var(--muted); max-width: 230px; }
+    .upload input[type=file]::file-selector-button {
+        font-family: inherit; font-weight: 600; color: var(--text); cursor: pointer;
+        background: rgba(140,105,40,0.054); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; margin-right: 8px;
+    }
+    .toast { padding: 10px 14px; border-radius: 12px; font-size: 14px; margin-bottom: 18px; }
+    .toast.ok { background: rgba(52,211,153,0.14); color: #0f8a5f; }
+    .toast.bad { background: rgba(248,113,113,0.14); color: #c0392b; }
+
+    /* Stat boxes */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
+    .stat { padding: 18px 20px; border-radius: 18px; background: var(--panel); border: 1px solid var(--border); position: relative; overflow: hidden; }
+    .stat::after { content: ""; position: absolute; width: 90px; height: 90px; border-radius: 50%; right: -30px; top: -30px; filter: blur(30px); opacity: 0.35; }
+    .stat.g::after { background: var(--green); }
+    .stat.r::after { background: var(--red); }
+    .stat.p::after { background: var(--purple); }
+    .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .stat .value { font-size: 26px; font-weight: 800; margin-top: 6px; }
+    .stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+    .card, .cols > * { min-width: 0; }
+
+    /* Donut */
+    .donut-wrap { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+    .donut {
+        width: 190px; height: 190px; border-radius: 50%; flex-shrink: 0;
+        background: conic-gradient(
+            {% for s in slices %}{{ s.colour }} {{ s.start }}% {{ s.end }}%{{ "," if not loop.last }}{% endfor %}
+            {% if not slices %}rgba(140,105,40,0.072) 0 100%{% endif %});
+        display: grid; place-items: center;
+        box-shadow: 0 0 40px rgba(212,160,23,0.25);
+    }
+    .donut .inner { width: 132px; height: 132px; border-radius: 50%; background: #ffffff; display: grid; place-items: center; text-align: center; }
+    .donut b { font-size: 22px; display: block; }
+    .donut span { font-size: 11px; color: var(--muted); }
+    .legend { flex: 1; min-width: 220px; }
+    .legend a { display: flex; align-items: center; gap: 10px; padding: 6px 0; text-decoration: none; color: var(--text); font-size: 14px; border-bottom: 1px solid var(--border); }
+    .legend a:hover { color: #a87b0f; }
+    .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .legend .amt { margin-left: auto; font-weight: 700; }
+    .legend .chg { font-size: 11px; width: 62px; text-align: right; }
+
+    /* Review */
+    .review-head { display: flex; gap: 18px; align-items: center; margin-bottom: 14px; }
+    .grade {
+        width: 74px; height: 74px; border-radius: 20px; flex-shrink: 0;
+        display: grid; place-items: center; font-size: 38px; font-weight: 800;
+        background: var(--shine);
+        box-shadow: 0 10px 30px rgba(184,134,11,0.35);
+    }
+    .grade.A, .grade.B { background: linear-gradient(135deg, #10b981, var(--cyan)); box-shadow: 0 10px 30px rgba(52,211,153,0.35); }
+    .grade.D, .grade.F { background: linear-gradient(135deg, #ef4444, #fb923c); box-shadow: 0 10px 30px rgba(248,113,113,0.35); }
+    .headline { font-size: 20px; font-weight: 800; }
+    .verdict { line-height: 1.65; color: #4a4236; margin: 0 0 18px; }
+    .focus {
+        padding: 14px 16px; border-radius: 14px; margin-bottom: 18px;
+        background: linear-gradient(135deg, rgba(212,160,23,0.25), rgba(184,134,11,0.12));
+        border: 1px solid rgba(212,160,23,0.35); font-weight: 600;
+    }
+    .focus small { display: block; font-size: 11px; color: #a87b0f; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+    .r-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .r-cols h3 { font-size: 15px; margin: 0 0 10px; }
+    .cut { padding: 12px 14px; border-radius: 12px; background: rgba(140,105,40,0.027); margin-bottom: 8px; }
+    .cut .t { display: flex; justify-content: space-between; gap: 10px; font-weight: 700; }
+    .cut .h { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .budget-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .budget-row .bar { grid-column: 1 / -1; height: 6px; border-radius: 6px; background: rgba(140,105,40,0.063); overflow: hidden; }
+    .budget-row .bar div { height: 100%; border-radius: 6px; }
+    .budget-row .note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+    .list { margin: 0; padding-left: 18px; line-height: 1.6; font-size: 14px; }
+    .think { display: none; align-items: center; gap: 10px; color: #a87b0f; margin-top: 12px; }
+    .spin { width: 18px; height: 18px; border-radius: 50%; border: 3px solid rgba(212,160,23,0.25); border-top-color: #a87b0f; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Goals */
+    .goals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .goal { padding: 16px 18px; border-radius: 16px; background: rgba(140,105,40,0.027); border: 1px solid var(--border); }
+    .goal .name { font-weight: 800; font-size: 16px; display: flex; justify-content: space-between; gap: 8px; }
+    .goal .nums { font-size: 13px; color: var(--muted); margin: 6px 0 10px; }
+    .goal .nums b { color: var(--text); }
+    .prog { height: 10px; border-radius: 10px; background: rgba(140,105,40,0.072); overflow: hidden; }
+    .prog div { height: 100%; border-radius: 10px; background: linear-gradient(90deg, var(--purple), var(--pink), var(--cyan)); }
+    .need { font-size: 13px; margin-top: 10px; }
+    .need b { color: #b5473a; }
+    .goal details summary { cursor: pointer; font-size: 12px; color: #a87b0f; margin-top: 10px; list-style: none; }
+    .goal form { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .goal .field { padding: 8px 10px; font-size: 13px; width: 110px; }
+    .goal button { padding: 8px 12px; font-size: 13px; box-shadow: none; }
+    .x button { background: none; box-shadow: none; color: var(--muted); padding: 2px 6px; font-size: 12px; }
+    .x button:hover { color: var(--red); transform: none; box-shadow: none; }
+    .x { margin: 0; }
+    .add-goal { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .add-goal .grow { flex: 1; min-width: 150px; }
+
+    /* Lists */
+    .line { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .line .meta { font-size: 12px; color: var(--muted); }
+    .txn { display: grid; grid-template-columns: 54px 1fr 170px 90px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .txn .d { font-size: 12px; color: var(--muted); }
+    .txn .desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .txn select { width: 100%; padding: 7px 9px; font-size: 12px; }
+    .txn form { margin: 0; }
+    .txn .a { text-align: right; font-weight: 700; }
+    .chip-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); text-decoration: none; }
+    .empty { text-align: center; padding: 34px 10px; }
+    .empty .big { font-size: 48px; }
+    .steps { text-align: left; max-width: 460px; margin: 14px auto 0; line-height: 1.8; color: #4a4236; }
+    textarea.field { width: 100%; resize: vertical; line-height: 1.55; }
+
+    /* Talk it through */
+    .chat { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 14px; }
+    .bubble { max-width: 82%; padding: 11px 14px; border-radius: 16px; line-height: 1.55; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .bubble.me { align-self: flex-end; background: var(--shine); color: var(--ink); border-bottom-right-radius: 5px; }
+    .bubble.coach { align-self: flex-start; background: rgba(140,105,40,0.045); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+    .bubble small { display: block; font-size: 11px; opacity: 0.7; margin-bottom: 3px; font-weight: 700; }
+    .say { display: flex; gap: 8px; align-items: flex-end; }
+    .say textarea { flex: 1; min-width: 0; }
+    .ideas { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ideas button { background: rgba(140,105,40,0.045); border: 1px solid var(--border); box-shadow: none; color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 11px; border-radius: 20px; }
+    .ideas button:hover { color: var(--text); transform: none; }
+    .facts { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .facts h3 { font-size: 14px; margin: 0 0 8px; }
+    .fact { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; color: #4a4236; }
+    @media (max-width: 760px) { .bubble { max-width: 92%; } }
+
+    @media (max-width: 1000px) { .cols, .r-cols { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+        .stats { grid-template-columns: 1fr 1fr; }
+        .stat .value { font-size: 21px; }
+        .goals { grid-template-columns: 1fr; }
+        .donut-wrap { justify-content: center; }
+        .txn { grid-template-columns: 1fr auto; }
+        .txn .d { grid-column: 1 / -1; }
+        .txn form { grid-column: 1 / -1; order: 5; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>💷 <span class="gradient-text">Money</span></h1>
+<p class="muted" style="margin:6px 0 22px">Every pound gets a job. Upload your statement, see where it went, get told straight.</p>
+
+{% if added %}<div class="toast ok">✅ Read {{ added }} transactions. Anything it guessed wrong, change the category and it'll remember that shop.</div>{% endif %}
+{% if regraded %}<div class="toast ok">🔄 The coach took what you said on board and updated the review.</div>{% endif %}
+{% if error %}<div class="toast bad">⚠️ {{ error }}</div>{% endif %}
+
+<div class="top-bar">
+    <div class="months">
+        {% for m in months %}<a href="/money?month={{ m }}" class="{{ 'on' if m == month }}">{{ m[5:] }}/{{ m[2:4] }}</a>{% endfor %}
+    </div>
+    <form class="upload" method="post" action="/upload-statement" enctype="multipart/form-data">
+        <input type="file" name="statement" accept=".csv,text/csv,.pdf,application/pdf" required>
+        <button>⬆ Upload statement</button>
+    </form>
+</div>
+
+{% if not this.rows %}
+<div class="card empty">
+    <div class="big">🧾</div>
+    <h2 style="margin:10px 0 4px">No transactions for {{ month_name }} yet</h2>
+    <div class="muted">Upload your Nationwide statement, CSV or PDF:</div>
+    <ol class="steps">
+        <li>Log in to Nationwide <b>Internet Banking</b> (on a laptop is easiest)</li>
+        <li>Open your current account and choose <b>Download transactions</b></li>
+        <li>Pick the month and the <b>CSV</b> format, then download (a <b>PDF</b> statement works too, it just takes about a minute to read)</li>
+        <li>Upload it with the button above. Uploading the same file twice is fine, nothing doubles.</li>
+    </ol>
+</div>
+{% else %}
+
+<div class="stats">
+    <div class="stat g"><div class="label">Money in</div><div class="value up">£{{ "{:,.0f}".format(this.money_in) }}</div><div class="sub">{{ month_name }}</div></div>
+    <div class="stat r"><div class="label">Spent</div><div class="value down">£{{ "{:,.0f}".format(this.spent) }}</div>
+        <div class="sub">{% if prev.spent %}{{ "▲" if this.spent > prev.spent else "▼" }} £{{ "{:,.0f}".format((this.spent - prev.spent)|abs) }} vs last month{% else %}&nbsp;{% endif %}</div></div>
+    <div class="stat {{ 'g' if left_over >= 0 else 'r' }}"><div class="label">Left over</div><div class="value {{ 'up' if left_over >= 0 else 'down' }}">{{ "-" if left_over < 0 }}£{{ "{:,.0f}".format(left_over|abs) }}</div><div class="sub">{{ save_rate }}% of what came in</div></div>
+    <div class="stat p"><div class="label">Trading net</div><div class="value {{ 'up' if payouts - fees >= 0 else 'down' }}">{{ "-" if payouts - fees < 0 }}£{{ "{:,.0f}".format((payouts - fees)|abs) }}</div><div class="sub">£{{ "{:,.0f}".format(payouts) }} payouts − £{{ "{:,.0f}".format(fees) }} fees</div></div>
+</div>
+
+<div class="cols">
+    <div class="card">
+        <h2>🍩 Where it went</h2>
+        <div class="donut-wrap">
+            <div class="donut"><div class="inner"><div><b>£{{ "{:,.0f}".format(this.spent) }}</b><span>spent</span></div></div></div>
+            <div class="legend">
+                {% for s in slices %}
+                <a href="/money?month={{ month }}&cat={{ s.cat|urlencode }}#txns">
+                    <span class="dot" style="background:{{ s.colour }}"></span>{{ s.cat }}
+                    <span class="amt">£{{ "{:,.0f}".format(s.amount) }}</span>
+                    <span class="chg {% if s.change is not none %}{{ 'down' if s.change > 0 else 'up' }}{% endif %}">
+                        {% if s.change is not none and s.change|abs >= 1 %}{{ "▲" if s.change > 0 else "▼" }}£{{ "{:,.0f}".format(s.change|abs) }}{% else %}{{ s.pct }}%{% endif %}
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <h2>🔁 Subscriptions</h2>
+        {% for name, amount in subs %}
+        <div class="line"><span>{{ name|title }}</span><b>£{{ "%.2f"|format(amount) }}</b></div>
+        {% else %}
+        <div class="muted">None found this month.</div>
+        {% endfor %}
+        {% if subs %}<div class="line" style="border:none"><span class="muted">That's £{{ "{:,.0f}".format(subs|sum(attribute=1) * 12) }} a year</span><b>£{{ "%.2f"|format(subs|sum(attribute=1)) }}/mo</b></div>{% endif %}
+
+        <h2 style="margin-top:22px">💸 Biggest spends</h2>
+        {% for r in biggest %}
+        <div class="line"><div>{{ r.description }}<div class="meta">{{ r.day[8:] }}/{{ r.day[5:7] }} · {{ r.category }}</div></div><b class="down">£{{ "{:,.2f}".format(-r.amount) }}</b></div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- The brain's verdict -->
+<div class="card" id="review">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h2 style="margin:0">🧠 Money review: {{ month_name }}</h2>
+        <form method="post" action="/money-review" onsubmit="document.getElementById('think').style.display='flex'" style="margin:0">
+            <input type="hidden" name="month" value="{{ month }}">
+            <button {{ "disabled" if not this.rows }}>{{ "Review again" if review else "Review my month" }}</button>
+        </form>
+    </div>
+    <div class="think" id="think"><div class="spin"></div> Going through every pound... (about 30 seconds)</div>
+    {% if review %}
+    <div style="margin-top:18px">
+        <div class="review-head">
+            <div class="grade {{ review.grade[:1] }}">{{ review.grade }}</div>
+            <div><div class="headline">{{ review.headline }}</div><div class="muted" style="font-size:12px;margin-top:4px">Reviewed {{ review_date }}</div></div>
+        </div>
+        <p class="verdict">{{ review.verdict }}</p>
+        <div class="focus"><small>Your one focus for next month</small>{{ review.focus }}</div>
+        <div class="r-cols">
+            <div>
+                <h3>✂️ Cut back</h3>
+                {% for c in review.cut_backs %}
+                <div class="cut"><div class="t"><span>{{ c.what }}</span><span class="up">+£{{ "{:,.0f}".format(c.save_per_month) }}/mo</span></div><div class="h">{{ c.how }}</div></div>
+                {% endfor %}
+                <div class="muted" style="font-size:13px;margin-top:6px">Total: <b class="up">£{{ "{:,.0f}".format(review.cut_backs|sum(attribute='save_per_month')) }} a month</b> back in your pocket.</div>
+
+                <h3 style="margin-top:22px">🎯 Save each month</h3>
+                {% for s in review.save_plan %}
+                <div class="line"><div>{{ s.goal }}<div class="meta">{{ s.note }}</div></div><b style="color:#b5473a;white-space:nowrap">£{{ "{:,.0f}".format(s.per_month) }}</b></div>
+                {% endfor %}
+            </div>
+            <div>
+                <h3>📏 Your budget</h3>
+                {% for b in review.budget %}
+                {% set pct = (b.spent / b.limit * 100) if b.limit else 100 %}
+                <div class="budget-row">
+                    <span>{{ b.category }}</span><span class="{{ 'down' if b.spent > b.limit else 'up' }}">£{{ "{:,.0f}".format(b.spent) }} / £{{ "{:,.0f}".format(b.limit) }}</span>
+                    <div class="bar"><div style="width:{{ [pct, 100]|min }}%;background:{{ 'var(--red)' if b.spent > b.limit else colours.get(b.category, 'var(--purple)') }}"></div></div>
+                    {% if b.note %}<div class="note">{{ b.note }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                {% if review.wins %}<h3 style="margin-top:22px">🏆 Wins</h3><ul class="list">{% for w in review.wins %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+                {% if review.warnings %}<h3 style="margin-top:18px">🚩 Watch out</h3><ul class="list">{% for w in review.warnings %}<li>{{ w }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+        </div>
+    </div>
+    {% elif this.rows %}
+    <p class="muted" style="margin:14px 0 0">Press the button and the brain grades your month, sets your budget, finds what to cut and splits your savings across your goals.</p>
+    {% endif %}
+</div>
+
+<!-- Talk it through with the coach -->
+<div class="card" id="coach">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h2 style="margin:0">💬 Talk it through</h2>
+        {% if chat %}
+        <form method="post" action="/clear-chat" onsubmit="return confirm('Start this month\'s chat again? Remembered facts stay.')" class="x">
+            <input type="hidden" name="month" value="{{ month }}"><button>Clear chat</button>
+        </form>
+        {% endif %}
+    </div>
+    <p class="muted" style="margin:6px 0 12px;font-size:13px">Tell the coach what the bank can't show: one-offs, money owed to you, things already cancelled. It answers, re-grades if it changes the picture, and remembers anything that's always true for next month.</p>
+    {% if chat %}
+    <div class="chat">
+        {% for m in chat %}
+        <div class="bubble {{ m.role }}"><small>{{ "You" if m.role == "me" else "🧠 Coach" }}</small>{{ m.text }}</div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ideas">
+        <button type="button" onclick="say(this)">That big payment was a one-off</button>
+        <button type="button" onclick="say(this)">I've already cancelled one of the gyms</button>
+        <button type="button" onclick="say(this)">Some of this was money I paid back for friends</button>
+        <button type="button" onclick="say(this)">Why did I get that grade?</button>
+    </div>
+    {% endif %}
+    <form class="say" method="post" action="/money-chat" onsubmit="document.getElementById('think2').style.display='flex'">
+        <input type="hidden" name="month" value="{{ month }}">
+        <textarea class="field" name="message" id="msg" rows="2" placeholder="e.g. The £400 at Kwik Fit was a one-off repair" required></textarea>
+        <button>Send</button>
+    </form>
+    <div class="think" id="think2"><div class="spin"></div> The coach is thinking... (up to a minute if it redoes the review)</div>
+
+    {% if facts %}
+    <div class="facts">
+        <h3>🧷 What the coach remembers for every month</h3>
+        {% for f in facts %}
+        <div class="fact"><span>{{ f.fact }}</span>
+            <form method="post" action="/delete-fact/{{ f.id }}" class="x"><input type="hidden" name="month" value="{{ month }}"><button title="Forget this">✕</button></form>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+<script>
+    function say(btn) { const box = document.getElementById("msg"); box.value = btn.textContent; box.focus(); }
+</script>
+
+<!-- Goals -->
+<div class="card" id="goals">
+    <h2>🎯 Goals</h2>
+    <div class="goals">
+        {% for g in goals %}
+        <div class="goal">
+            <div class="name"><span>{{ g.name }}</span>
+                <form method="post" action="/delete-goal/{{ g.id }}" class="x" onsubmit="return confirm('Delete this goal?')" style="margin:0"><button>✕</button></form></div>
+            <div class="nums"><b>£{{ "{:,.0f}".format(g.saved) }}</b> of £{{ "{:,.0f}".format(g.target) }}{% if g.label %} · by {{ g.label }}{% endif %}</div>
+            <div class="prog"><div style="width:{{ g.pct }}%"></div></div>
+            {% if g.per_month is not none %}
+            <div class="need">{% if g.left > 0 %}Needs <b>£{{ "{:,.0f}".format(g.per_month) }} a month</b> for {{ g.months }} months{% else %}<b class="up">Done 🎉</b>{% endif %}</div>
+            {% endif %}
+            <details>
+                <summary>Update</summary>
+                <form method="post" action="/update-goal/{{ g.id }}">
+                    <input class="field" type="number" step="1" name="saved" value="{{ g.saved|int }}" title="Saved so far">
+                    <input class="field" type="number" step="1" name="target" value="{{ g.target|int }}" title="Target">
+                    <input class="field" type="date" name="by_date" value="{{ g.by_date or '' }}" style="width:150px">
+                    <button>Save</button>
+                </form>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+    <form class="add-goal" method="post" action="/add-goal">
+        <input class="field grow" name="name" placeholder="New goal, e.g. 🌍 Holiday" required>
+        <input class="field" type="number" step="1" name="target" placeholder="Target £" required style="width:120px">
+        <input class="field" type="number" step="1" name="saved" placeholder="Saved £" style="width:110px">
+        <input class="field" type="date" name="by_date">
+        <button>Add goal</button>
+    </form>
+</div>
+
+{% if this.rows %}
+<!-- Every transaction, with a category you can change -->
+<div class="card" id="txns">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <h2 style="margin:0">🧾 Transactions{% if show_cat %}: {{ show_cat }}{% endif %}</h2>
+        {% if show_cat %}<a class="chip-cat" href="/money?month={{ month }}#txns">✕ show all</a>{% endif %}
+    </div>
+    {% for r in txns %}
+    <div class="txn">
+        <div class="d">{{ r.day[8:] }}/{{ r.day[5:7] }}</div>
+        <div class="desc" title="{{ r.description }}">{{ r.description }}</div>
+        <form method="post" action="/set-category/{{ r.id }}">
+            <select class="field" name="category" onchange="this.form.submit()">
+                {% for c in categories %}<option {{ "selected" if c == r.category }}>{{ c }}</option>{% endfor %}
+            </select>
+        </form>
+        <div class="a {{ 'up' if r.amount > 0 else '' }}">{{ "+" if r.amount > 0 }}£{{ "{:,.2f}".format(r.amount|abs) }}</div>
+    </div>
+    {% endfor %}
+    <form method="post" action="/clear-month" onsubmit="return confirm('Remove every transaction for {{ month_name }}?')" style="margin-top:14px;text-align:right">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button class="x" style="background:none;box-shadow:none;color:var(--muted);font-size:12px">Wrong file? Clear {{ month_name }}</button>
+    </form>
+</div>
+{% endif %}
+
+<!-- What the brain knows about your money -->
+<div class="card" id="about">
+    <h2>📝 About my money</h2>
+    <p class="muted" style="margin:-8px 0 12px;font-size:13px">The brain reads this every review. Keep it up to date: savings, income changes, new goals.</p>
+    <form method="post" action="/money-profile">
+        <textarea class="field" name="profile" rows="12">{{ profile }}</textarea>
+        <button style="margin-top:10px">Save</button>
+    </form>
+</div>
+{% endblock %}

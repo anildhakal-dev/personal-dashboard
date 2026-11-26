@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .head { margin-bottom: 26px; }
+    .head p { margin: 8px 0 0; }
+    .modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+    .module {
+        display: block; text-decoration: none; color: var(--text);
+        position: relative; overflow: hidden; margin: 0;
+        border-top: 3px solid var(--c);
+        transition: transform 0.2s, background 0.2s;
+    }
+    .module:hover { transform: translateY(-3px); background: rgba(140,105,40,0.063); }
+    /* soft glow in the module's colour */
+    .module::after {
+        content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%;
+        background: var(--c); filter: blur(70px); opacity: 0.18; top: -60px; right: -40px;
+    }
+    .module .name { font-weight: 800; font-size: 18px; margin-bottom: 6px; }
+    .module .next { font-size: 13px; color: var(--c); font-weight: 700; min-height: 18px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .chip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 20px; background: rgba(140,105,40,0.054); color: var(--muted); }
+    .chip.red { background: rgba(248,113,113,0.15); color: #c0392b; }
+    .chip.green { background: rgba(52,211,153,0.15); color: #0f8a5f; }
+    .chip.amber { background: rgba(251,146,60,0.15); color: #c2620a; }
+    .due { margin-top: 14px; font-size: 13px; color: var(--muted); }
+    .due b { color: var(--text); }
+    .empty { text-align: center; padding: 40px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="head">
+    <h1>📚 <span class="gradient-text">Study</span></h1>
+    <p class="muted">A notebook for each module: add your sources, chat with them, and make flashcards, quizzes and mind maps.</p>
+</div>
+
+{% if modules %}
+<div class="modules">
+    {% for m in modules %}
+    <a class="card module" style="--c: {{ m.colour }}" href="/study/module?m={{ m.name | urlencode }}">
+        <div class="name">{{ m.name }}</div>
+        <div class="next">{% if m.next %}Next: {{ m.next }}{% endif %}</div>
+        <div class="chips">
+            <span class="chip">📚 {{ m.sources }} source{{ '' if m.sources == 1 else 's' }}</span>
+            {% if m.gaps %}<span class="chip red">⚠️ {{ m.gaps }} gap{{ '' if m.gaps == 1 else 's' }}</span>
+            {% elif m.sources %}<span class="chip green">✓ no gaps</span>{% endif %}
+            {% if m.deck %}<span class="chip {{ {'green': 'green', 'amber': 'amber', 'red': 'red'}.get(m.deck.light, '') }}">🃏 {{ m.decks_due }} deck{{ '' if m.decks_due == 1 else 's' }} · {{ m.deck.label }}</span>{% endif %}
+        </div>
+        {% if m.deadline %}
+        <div class="due">⏳ <b>{{ m.deadline.title }}</b> · {{ m.deadline.nice }}
+            ({{ 'today' if m.deadline.days == 0 else 'in ' ~ m.deadline.days ~ ' days' }})</div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card empty muted">No modules yet. Add your timetable on the <a href="/uni" style="color:#a87b0f">Uni page</a> first.</div>
+{% endif %}
+{% endblock %}

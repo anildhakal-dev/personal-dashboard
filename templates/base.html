@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard</title>
+    <!-- These make it install like an app on your phone (Add to Home Screen) -->
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="icon" href="/static/icon-192.png">
+    <meta name="theme-color" content="#faf8f3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Dashboard">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Colours used everywhere. Change these to re-theme the whole app.
+           (The names purple/pink/cyan are old; they now hold the golds.) */
+        :root {
+            --bg: #faf8f3;
+            --panel: #ffffff;
+            --border: rgba(160, 125, 55, 0.18);
+            --text: #241f18;
+            --muted: #857a6a;
+            --purple: #d4a017;   /* main gold */
+            --pink: #b8860b;     /* deep gold */
+            --cyan: #f0c95a;     /* light gold */
+            --ink: #3b2a06;      /* dark text that sits on gold */
+            /* Shiny metallic gold, used on buttons and highlights */
+            --shine: linear-gradient(135deg, #f9e08b 0%, #e6b43c 32%, #c9951f 58%, #f3d16b 82%, #d9a52a 100%);
+            --green: #15885f;
+            --red: #c8463a;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Plus Jakarta Sans", -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        /* A very soft warm glow in the top corner, nothing else */
+        body::before {
+            content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+            background: radial-gradient(900px 500px at 100% 0%, rgba(217, 180, 106, 0.14), transparent 70%);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            padding: 28px 18px;
+            border-right: 1px solid var(--border);
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            /* stays in place while the page scrolls, so the quote is always visible */
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 800; font-size: 19px;
+            margin: 0 8px 36px;
+        }
+        .logo-mark {
+            width: 34px; height: 34px; border-radius: 10px;
+            background: var(--shine);
+            display: grid; place-items: center; color: var(--ink); font-size: 16px;
+            box-shadow: 0 6px 16px rgba(212,160,23,0.3);
+        }
+        .nav-label {
+            font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+            color: var(--muted); margin: 0 12px 10px;
+        }
+        .sidebar a {
+            display: flex; align-items: center; gap: 12px;
+            color: var(--muted);
+            text-decoration: none;
+            padding: 11px 14px;
+            border-radius: 12px;
+            margin-bottom: 4px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .sidebar a:hover { background: #faf5ea; color: var(--text); }
+        .sidebar a.active {
+            background: #fcf0cc;
+            color: var(--pink); font-weight: 700;
+            border: 1px solid rgba(212,160,23,0.3);
+        }
+        .sidebar .soon { opacity: 0.45; pointer-events: none; }
+        .tag {
+            margin-left: auto; font-size: 10px; padding: 2px 8px;
+            border-radius: 20px; background: var(--panel); border: 1px solid var(--border);
+        }
+        .nav-count {
+            margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+            background: var(--red); color: white; font-size: 11px; font-weight: 800;
+            display: inline-grid; place-items: center;
+        }
+        .sidebar-foot { margin-top: 16px; font-size: 12px; color: var(--muted); padding: 0 12px; }
+
+        /* Rotating quote widget */
+        .quote-box {
+            margin-top: auto;
+            padding: 18px 16px 14px;
+            border-radius: 16px;
+            background: linear-gradient(160deg, #fdf3d6, #fffdf8);
+            border: 1px solid rgba(212,160,23,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        .quote-box::before {
+            content: "\201C";
+            position: absolute; top: -18px; right: 10px;
+            font-size: 90px; font-family: Georgia, serif;
+            color: rgba(140,105,40,0.072);
+        }
+        .quote-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #a87b0f; margin-bottom: 8px; }
+        #quote-text { font-size: 14px; line-height: 1.55; font-style: italic; margin: 0 0 10px; transition: opacity 0.5s; }
+        #quote-author { font-size: 12px; font-weight: 700; color: #a87b0f; transition: opacity 0.5s; }
+        .quote-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+        .quote-actions a { padding: 0; margin: 0; font-size: 12px; display: inline; }
+        .quote-actions a:hover { background: none; }
+        .quote-next {
+            background: rgba(140,105,40,0.072); box-shadow: none; color: var(--pink);
+            padding: 5px 11px; font-size: 12px; border-radius: 8px;
+        }
+
+        /* Main area */
+        main { flex: 1; padding: 40px 48px; max-width: 1100px; }
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px 26px;
+            box-shadow: 0 1px 2px rgba(90, 66, 24, 0.04), 0 8px 24px rgba(90, 66, 24, 0.05);
+            margin-bottom: 22px;
+        }
+        h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+        h2 { margin: 0 0 18px; font-size: 18px; }
+        .gradient-text {
+            background: linear-gradient(90deg, #b8860b, #e6b43c 45%, #c9951f 70%, #e8b833);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+        }
+        .muted { color: var(--muted); }
+        button {
+            font-family: inherit;
+            background: var(--shine);
+            color: var(--ink);
+            border: none;
+            padding: 12px 22px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px; font-weight: 600;
+            box-shadow: 0 8px 22px rgba(212,160,23,0.32), inset 0 1px 0 rgba(255,255,255,0.55);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(212,160,23,0.45), inset 0 1px 0 rgba(255,255,255,0.55); filter: brightness(1.05); }
+
+        /* Form boxes used on every page */
+        .field {
+            font-family: inherit; font-size: 14px;
+            padding: 11px 14px;
+            background: #fffdf8;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            outline: none;
+            color-scheme: light;
+        }
+        .field:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(212,160,23,0.2); }
+        .field::placeholder { color: var(--muted); }
+        select.field option { background: #ffffff; }
+
+        /* Phones: logo on top, menu becomes a row of swipeable pills,
+           and the quote moves to the bottom of the page */
+        @media (max-width: 760px) {
+            body { flex-direction: column; }
+            .sidebar { display: contents; }   /* lets us reorder the sidebar's parts */
+            .logo { order: 1; margin: 0; padding: 16px 16px 10px; }
+            .nav {
+                order: 2;
+                display: flex; gap: 8px;
+                overflow-x: auto;
+                padding: 0 16px 12px;
+                border-bottom: 1px solid var(--border);
+                scrollbar-width: none;
+            }
+            .nav::-webkit-scrollbar { display: none; }
+            .nav a { flex-shrink: 0; margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--border); white-space: nowrap; }
+            .nav .soon { display: none; }
+            main { order: 3; padding: 22px 16px; }
+            .quote-box { order: 4; margin: 0 16px 24px; }
+            .sidebar-foot, .nav-label { display: none; }
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="logo"><span class="logo-mark">✦</span> My Dashboard</div>
+        <div class="nav-label">Menu</div>
+        <div class="nav">
+        <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
+        <a class="{{ 'active' if request.path == '/brain' }}" href="/brain">🧠 Brain</a>
+        <a class="{{ 'active' if request.path == '/uni' }}" href="/uni">🎓 Uni</a>
+        <a class="{{ 'active' if request.path.startswith('/study') }}" href="/study">📚 Study</a>
+        <a class="{{ 'active' if request.path == '/gym' }}" href="/gym">🏋️ Gym</a>
+        <a class="{{ 'active' if request.path == '/trading' }}" href="/trading">📈 Trading</a>
+        <a class="{{ 'active' if request.path == '/money' }}" href="/money">💷 Money</a>
+        <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
+        <a class="{{ 'active' if request.path == '/calendar' }}" href="/calendar">📅 Calendar</a>
+        <a class="{{ 'active' if request.path.startswith('/alerts') }}" href="/alerts">🔔 Alerts {% if alert_count %}<span class="nav-count">{{ alert_count }}</span>{% endif %}</a>
+        <a href="/logout">🚪 Log out</a>
+        </div>
+
+        <!-- Rotating quote: changes every 20 seconds, or when you press Next -->
+        {% if all_quotes %}
+        <div class="quote-box">
+            <div class="quote-label">✝ Daily word</div>
+            <p id="quote-text"></p>
+            <div id="quote-author"></div>
+            <div class="quote-actions">
+                <a href="/quotes">Edit quotes</a>
+                <button class="quote-next" onclick="nextQuote()">Next →</button>
+            </div>
+        </div>
+        {% endif %}
+        <div class="sidebar-foot">Built by Anil with Flask</div>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Quotes come from the database via Flask (tojson turns them into a JS list)
+        const quotes = {{ all_quotes | tojson }};
+        let current = {{ quote_start }};
+
+        function showQuote() {
+            const text = document.getElementById("quote-text");
+            const author = document.getElementById("quote-author");
+            if (!text || quotes.length === 0) return;
+            // fade out, swap the words, fade back in
+            text.style.opacity = 0;
+            author.style.opacity = 0;
+            setTimeout(function () {
+                text.textContent = quotes[current].text;
+                author.textContent = quotes[current].author ? "— " + quotes[current].author : "";
+                text.style.opacity = 1;
+                author.style.opacity = 1;
+            }, 400);
+        }
+
+        function nextQuote() {
+            current = (current + 1) % quotes.length;
+            showQuote();
+        }
+
+        showQuote();
+        setInterval(nextQuote, 20000);
+    </script>
+</body>
+</html>
