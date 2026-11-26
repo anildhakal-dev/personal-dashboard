@@ -81,6 +81,16 @@ def week_card(conn, monday, today=None):
                       "headline": f"{done_dl} of {len(dls)} handed in", "detail": ", ".join(d["title"] for d in dls),
                       "fix": "Start assignments the week they're set. Last-minute work doesn't get a 1st.", "url": "/uni"})
 
+    # Assignment mini-deadlines due this week (from the Assignments planner)
+    if has_table(conn, "assign_steps"):
+        steps = conn.execute("SELECT * FROM assign_steps WHERE due BETWEEN ? AND ?", (m, last.isoformat())).fetchall()
+        if steps:
+            done_s = sum(1 for x in steps if x["done"])
+            parts.append({"name": "Assignment steps", "emoji": "📝", "score": 100 * done_s / len(steps),
+                          "headline": f"{done_s} of {len(steps)} mini-deadlines hit",
+                          "detail": "Missed: " + ", ".join(x["title"] for x in steps if not x["done"])[:140] if done_s < len(steps) else "Every step on time.",
+                          "fix": "Use your library days for the assignment step first, everything else after.", "url": "/assignments"})
+
     # To-dos due this week, and anything overdue right now
     tasks = conn.execute("SELECT * FROM tasks WHERE due BETWEEN ? AND ?", (m, last.isoformat())).fetchall()
     overdue = conn.execute("SELECT COUNT(*) FROM tasks WHERE done = 0 AND due IS NOT NULL AND due != '' AND due < ?",
@@ -120,7 +130,7 @@ def week_card(conn, monday, today=None):
                           "detail": f"Biggest: {top[0]} £{top[1]:,.0f}.", "fix": "", "url": "/money"})
 
     # Did you track anything at all this week? (weeks before you started show as blank)
-    tracked = bool(done or eaten or trades or tasks or dls) or any(p["name"] == "Flashcards" for p in parts)
+    tracked = bool(done or eaten or trades or tasks or dls) or any(p["name"] == "Assignment steps" for p in parts) or any(p["name"] == "Flashcards" for p in parts)
     scored = [p for p in parts if p["score"] is not None]
     overall = round(sum(p["score"] for p in scored) / len(scored)) if scored else 0
     g = grade(overall)

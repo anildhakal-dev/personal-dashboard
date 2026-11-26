@@ -1317,6 +1317,10 @@ app.register_blueprint(alerts.bp)
 import scorecard
 app.register_blueprint(scorecard.bp)
 
+# ---------- Assignment planner (assignments.py) ----------
+import assignments
+app.register_blueprint(assignments.bp)
+
 
 setup_database()
 

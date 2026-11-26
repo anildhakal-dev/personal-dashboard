@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 900px; }
+    .head p { margin: 8px 0 22px; }
+    .err { background: rgba(200,70,58,0.1); color: var(--red); padding: 10px 14px; border-radius: 12px; font-size: 13.5px; margin-bottom: 16px; }
+    .plan { scroll-margin-top: 20px; }
+    .top { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: flex-start; }
+    .top h2 { margin: 0 0 4px; font-size: 19px; }
+    .top .sub { font-size: 13px; color: var(--muted); }
+    .due { text-align: right; }
+    .due b { display: block; font-size: 15px; }
+    .due span { font-size: 12.5px; color: var(--muted); }
+    .bar { height: 7px; border-radius: 7px; background: rgba(140,105,40,0.1); overflow: hidden; margin: 16px 0 6px; }
+    .bar i { display: block; height: 100%; background: var(--shine); border-radius: 7px; }
+    .status { font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+    .status.behind { color: var(--red); } .status.ok { color: var(--green); }
+    .next { background: rgba(212,160,23,0.1); border: 1px solid rgba(212,160,23,0.3); border-radius: 14px; padding: 11px 14px; font-size: 14px; margin-bottom: 14px; }
+    .next b { color: var(--pink); }
+
+    .steps { position: relative; margin: 4px 0 6px; }
+    .step { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--border); }
+    .step:first-child { border-top: none; }
+    .tickb { width: 26px; height: 26px; padding: 0; border-radius: 8px; flex-shrink: 0; background: transparent; border: 2px solid var(--l); box-shadow: none; color: white; font-size: 13px; }
+    .tickb:hover { transform: none; box-shadow: none; }
+    .step.green .tickb { background: var(--green); }
+    .step.green { --l: var(--green); } .step.amber { --l: #e8930c; } .step.red { --l: var(--red); } .step.grey { --l: rgba(140,105,40,0.35); }
+    .step .body { flex: 1; min-width: 0; }
+    .step .t { font-weight: 700; font-size: 14.5px; line-height: 1.4; }
+    .step.green .t { text-decoration: line-through; color: var(--muted); font-weight: 600; }
+    .step .dt { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .step .dt b { color: var(--l); }
+    .step .det { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+    .edit { display: none; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .edit.open { display: flex; }
+    .edit .field { font-size: 13px; padding: 8px 10px; }
+    .edit input[name=title] { flex: 1; min-width: 160px; }
+    .edit button { padding: 8px 14px; font-size: 13px; }
+    .tools { display: flex; gap: 4px; flex-shrink: 0; }
+    .ic { background: transparent; box-shadow: none; color: var(--muted); padding: 4px 7px; font-size: 13px; }
+    .ic:hover { transform: none; box-shadow: none; color: var(--text); }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .alt { background: rgba(140,105,40,0.07); box-shadow: none; color: var(--text); padding: 10px 16px; font-size: 13px; }
+    .add { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    .add .field { font-size: 13px; padding: 8px 10px; }
+    .add input[name=title] { flex: 1; min-width: 160px; }
+    .add button { padding: 8px 14px; font-size: 13px; }
+    .empty { text-align: center; padding: 36px; }
+    .busy { position: fixed; inset: 0; z-index: 70; background: rgba(42,34,22,0.34); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; text-align: center; }
+    .busy.show { display: flex; }
+    .busy .spin { width: 46px; height: 46px; border-radius: 50%; border: 4px solid rgba(212,160,23,0.25); border-top-color: var(--pink); animation: spin 0.9s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 760px) { .due { text-align: left; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="head">
+    <h1>📝 <span class="gradient-text">Assignments</span></h1>
+    <p class="muted">Every assignment broken into mini-deadlines, worked back from the due date and put on your library days ({{ library }}). Fall behind and Alerts will tell you.</p>
+</div>
+
+{% if error %}<div class="err">Didn't work: {{ error }}</div>{% endif %}
+
+{% for p in plans %}
+<div class="card plan" id="a{{ p.d.id }}">
+    <div class="top">
+        <div>
+            <h2>{{ p.d.title }}</h2>
+            <div class="sub">{{ p.d.kind or 'Assignment' }}{% if p.d.module %} · {{ p.d.module }}{% endif %}</div>
+        </div>
+        <div class="due"><b>Due {{ p.due_label }}</b><span>{{ p.due_when }}</span></div>
+    </div>
+    <div class="bar"><i style="width:{{ (100 * p.done / p.total) if p.total else 0 }}%"></i></div>
+    {% if p.behind %}<div class="status behind">⚠️ {{ p.behind }} step{{ '' if p.behind == 1 else 's' }} behind. Catch up this library day.</div>
+    {% else %}<div class="status ok">✓ {{ p.done }} of {{ p.total }} done. On track.</div>{% endif %}
+    {% if p.next %}<div class="next"><b>Next:</b> {{ p.next.title }} · by {{ p.next.label }}</div>{% endif %}
+
+    <div class="steps">
+        {% for s in p.steps %}
+        <div class="step {{ s.light }}">
+            <form method="post" action="/assignments/step/{{ s.id }}/tick"><button class="tickb" title="Done">{{ '✓' if s.done }}</button></form>
+            <div class="body">
+                <div class="t">{{ s.title }}</div>
+                <div class="dt">{{ s.label }} · <b>{{ 'done' if s.done else s.when }}</b></div>
+                {% if s.detail and not s.done %}<div class="det">{{ s.detail }}</div>{% endif %}
+                <form class="edit" id="e{{ s.id }}" method="post" action="/assignments/step/{{ s.id }}/edit">
+                    <input class="field" name="title" value="{{ s.title }}">
+                    <input class="field" type="date" name="due" value="{{ s.due }}">
+                    <button>Save</button>
+                </form>
+            </div>
+            <div class="tools">
+                <button type="button" class="ic" title="Edit" onclick="document.getElementById('e{{ s.id }}').classList.toggle('open')">✎</button>
+                <form method="post" action="/assignments/step/{{ s.id }}/delete"><button class="ic" title="Delete">✕</button></form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <form class="add" method="post" action="/assignments/{{ p.d.id }}/add">
+        <input class="field" name="title" placeholder="Add your own step…" required>
+        <input class="field" type="date" name="due" required>
+        <button class="alt">+ Add</button>
+    </form>
+
+    <div class="actions">
+        <form method="post" action="/assignments/{{ p.d.id }}/tailor" onsubmit="document.getElementById('busy').classList.add('show')">
+            <button>✨ Make it specific with Claude</button>
+        </form>
+        <form method="post" action="/assignments/{{ p.d.id }}/rebuild" onsubmit="return confirm('Re-plan the unfinished steps from today? Ticked steps stay.')">
+            <button class="alt">↻ Re-plan from today</button>
+        </form>
+        {% if p.brief %}<a href="/study/checklist/{{ p.brief.id }}"><button type="button" class="alt">🎓 1st-class checklist</button></a>{% endif %}
+    </div>
+</div>
+{% else %}
+<div class="card empty"><div style="font-size:40px">🫡</div><p><b>No assignments coming up.</b><br>
+    <span class="muted">Add them on the <a href="/uni" style="color:var(--pink)">Uni page</a> and the plan builds itself.</span></p></div>
+{% endfor %}
+
+<div class="busy" id="busy"><div><div class="spin"></div><div style="font-weight:700">Claude is planning this from your brief…</div>
+    <div class="muted" style="font-size:13px;margin-top:6px">Usually under a minute.</div></div></div>
+<script>window.addEventListener("pageshow", () => document.getElementById("busy").classList.remove("show"));</script>
+{% endblock %}

@@ -152,6 +152,14 @@ def collect(conn, now=None):
             elif hours <= 48:
                 add("amber", "🃏", f"{k['title']} flashcards", f"{k['module']}. Due {when}.", f"/study/deck/{k['id']}", f"deck{k['id']}")
 
+    # 3a. Assignment mini-deadlines you're behind on, or due today/tomorrow
+    try:
+        import assignments
+        for level, title, body, url, key in assignments.step_alerts(conn, today):
+            add(level, "📝", title, body, url, key)
+    except Exception:
+        pass
+
     # 3b. 1st-class checklists with red items, when that module has a deadline in the next 3 weeks
     if table_exists(conn, "study_checks"):
         soon = {}

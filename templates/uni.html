@@ -159,7 +159,7 @@
 
 <!-- Deadlines and exams -->
 <div class="card">
-    <h2>🎯 Deadlines &amp; exams</h2>
+    <h2>🎯 Deadlines &amp; exams <a href="/assignments" style="float:right;font-size:13px;color:var(--pink);text-decoration:none">📝 Assignment plans →</a></h2>
     {% for d in deadlines %}
     <div class="dl {% if d.done %}done{% endif %}" style="--c: {{ colour_of.get(d.module, '#857a6a') }}">
         <form method="POST" action="/toggle-deadline/{{ d.id }}">
