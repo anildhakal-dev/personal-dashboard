@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .hero {
+        position: relative; overflow: hidden;
+        padding: 30px 32px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(236,72,153,0.18) 60%, rgba(34,211,238,0.15));
+        border: 1px solid rgba(139,92,246,0.35);
+        margin-bottom: 22px;
+    }
+    .hero::after {
+        content: "🧠"; position: absolute; right: 24px; top: 50%; transform: translateY(-50%);
+        font-size: 110px; opacity: 0.18;
+    }
+    .hero h1 { font-size: 32px; }
+    .hero p { color: #d8d4ff; margin: 8px 0 20px; max-width: 520px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+    .actions form { margin: 0; }
+    .ghost { background: rgba(255,255,255,0.1); box-shadow: none; border: 1px solid rgba(255,255,255,0.2); }
+    .ghost:hover { background: rgba(255,255,255,0.18); box-shadow: none; }
+
+    /* "Thinking..." overlay while Claude works */
+    #thinking {
+        display: none; position: fixed; inset: 0; z-index: 50;
+        background: rgba(11,13,23,0.85); backdrop-filter: blur(8px);
+        align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+        text-align: center; padding: 20px;
+    }
+    #thinking .orb {
+        width: 90px; height: 90px; border-radius: 50%;
+        background: conic-gradient(var(--purple), var(--pink), var(--cyan), var(--purple));
+        animation: spin 1.4s linear infinite;
+        box-shadow: 0 0 60px rgba(139,92,246,0.6);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #thinking p { color: var(--muted); margin: 0; }
+
+    .error { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.35); color: #fca5a5; padding: 14px 18px; border-radius: 14px; margin-bottom: 22px; font-size: 14px; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tabs a {
+        text-decoration: none; color: var(--muted); font-weight: 600; font-size: 14px;
+        padding: 9px 16px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border);
+    }
+    .tabs a.on { color: white; border-color: var(--purple); background: rgba(139,92,246,0.22); }
+
+    .cols { display: grid; grid-template-columns: 1.6fr 1fr; gap: 22px; align-items: start; }
+    .headline { font-size: 20px; font-weight: 800; margin: 0 0 6px; }
+    .made { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+
+    .day-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 22px 0 10px; flex-wrap: wrap; }
+    .day-title:first-of-type { margin-top: 0; }
+    .day-title h3 { margin: 0; font-size: 16px; }
+    .day-title span { font-size: 13px; color: var(--muted); }
+
+    /* Timeline blocks */
+    .block {
+        display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: start;
+        padding: 12px 14px; border-radius: 14px; margin-bottom: 8px;
+        background: rgba(255,255,255,0.03);
+        border-left: 4px solid var(--c);
+        transition: transform 0.2s;
+    }
+    .block:hover { transform: translateX(4px); background: rgba(255,255,255,0.06); }
+    .block .time { font-size: 13px; font-weight: 700; color: var(--c); padding-top: 2px; }
+    .block .t { font-weight: 600; }
+    .block .n { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .block .cat { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--c); margin-left: 6px; }
+    .block.now { background: rgba(139,92,246,0.16); box-shadow: 0 0 0 1px rgba(139,92,246,0.5), 0 0 24px rgba(139,92,246,0.25); }
+    .block.now .time::after { content: " · NOW"; color: white; }
+    .block.past { opacity: 0.45; }
+
+    .quote-card {
+        padding: 24px; border-radius: 20px; margin-bottom: 22px;
+        background: linear-gradient(160deg, rgba(139,92,246,0.25), rgba(34,211,238,0.08));
+        border: 1px solid rgba(139,92,246,0.3);
+    }
+    .quote-card .lbl { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: #c4b5fd; margin-bottom: 10px; }
+    .quote-card p { font-size: 17px; font-style: italic; line-height: 1.55; margin: 0 0 12px; }
+    .quote-card .src { font-weight: 700; color: #c4b5fd; font-size: 14px; }
+    .tips li { margin-bottom: 8px; line-height: 1.5; font-size: 14px; }
+    .tips ul { padding-left: 18px; margin: 0; }
+    textarea.field { width: 100%; min-height: 190px; resize: vertical; line-height: 1.5; }
+    .empty { text-align: center; padding: 40px 10px; color: var(--muted); }
+    .empty .big { font-size: 48px; }
+
+    @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+        .hero { padding: 24px 20px; }
+        .hero::after { display: none; }
+        .block { grid-template-columns: 1fr; gap: 4px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="thinking">
+    <div class="orb"></div>
+    <h2 style="margin:0">Planning…</h2>
+    <p>Reading your timetable, deadlines, gym and to-dos.<br>This takes up to a minute.</p>
+</div>
+
+<div class="hero">
+    <h1>Your <span class="gradient-text">brain</span></h1>
+    <p>Plans your time around uni, deadlines, gym, work and everything in "About me".</p>
+    <div class="actions">
+        <form method="POST" action="/make-plan" onsubmit="thinking()">
+            <input type="hidden" name="kind" value="day">
+            <button type="submit">⚡ Plan my day</button>
+        </form>
+        <form method="POST" action="/make-plan" onsubmit="thinking()">
+            <input type="hidden" name="kind" value="week">
+            <button type="submit" class="ghost">🗓 Plan my week</button>
+        </form>
+    </div>
+</div>
+
+{% if error %}<div class="error">⚠️ Something went wrong: {{ error }}</div>{% endif %}
+
+<div class="cols">
+    <div>
+        <div class="tabs">
+            <a href="/brain?show=day" class="{{ 'on' if show == 'day' }}">Today</a>
+            <a href="/brain?show=week" class="{{ 'on' if show == 'week' }}">This week</a>
+        </div>
+
+        {% set plan = week_plan if show == 'week' else day_plan %}
+        <div class="card">
+        {% if plan %}
+            <p class="headline">{{ plan.headline }}</p>
+            <div class="made">Made on {{ plan.made_on }} · press the button again any time to re-plan</div>
+
+            {% for d in plan.days %}
+            <div class="day-title"><h3>{{ d.label }}</h3><span>{{ d.focus }}</span></div>
+                {% for b in d.blocks %}
+                {% set is_today = d.date == today %}
+                <div class="block {% if is_today and b.start <= now < b.end %}now{% elif is_today and b.end <= now %}past{% endif %}"
+                     style="--c: {{ colours.get(b.category, '#8b90b0') }}">
+                    <div class="time">{{ b.start }} – {{ b.end }}</div>
+                    <div>
+                        <div class="t">{{ b.title }}<span class="cat">{{ b.category }}</span></div>
+                        {% if b.note %}<div class="n">{{ b.note }}</div>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% endfor %}
+        {% else %}
+            <div class="empty">
+                <div class="big">🧠</div>
+                <p>No {{ "week" if show == "week" else "day" }} plan yet. Press the button above.</p>
+            </div>
+        {% endif %}
+        </div>
+    </div>
+
+    <div>
+        {% if plan %}
+        <div class="quote-card">
+            <div class="lbl">✝ Picked for {{ "this week" if show == "week" else "today" }}</div>
+            <p>“{{ plan.quote.text }}”</p>
+            <div class="src">— {{ plan.quote.source }}</div>
+        </div>
+        <div class="card tips">
+            <h2>💡 Tips</h2>
+            <ul>{% for t in plan.tips %}<li>{{ t }}</li>{% endfor %}</ul>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>🙋 About me</h2>
+            <p class="muted" style="font-size:13px;margin:-8px 0 12px">The brain reads this every time. Fill in your real hours.</p>
+            <form method="POST" action="/about-me">
+                <textarea class="field" name="about_me">{{ about_me }}</textarea>
+                <button type="submit" style="margin-top:10px">Save</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Shows the spinning orb while Claude works
+    function thinking() {
+        document.getElementById("thinking").style.display = "flex";
+    }
+</script>
+{% endblock %}

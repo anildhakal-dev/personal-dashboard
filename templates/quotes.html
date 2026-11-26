@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .quote-form { display: grid; gap: 10px; }
+    .quote-form textarea, .quote-form input {
+        font-family: inherit; font-size: 15px;
+        padding: 13px 16px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        outline: none;
+    }
+    .quote-form textarea { min-height: 90px; resize: vertical; }
+    .quote-form textarea:focus, .quote-form input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.2); }
+    .quote-form .row { display: flex; gap: 10px; }
+    .quote-form .row input { flex: 1; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .q {
+        position: relative;
+        padding: 20px 20px 16px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid var(--border);
+        transition: transform 0.2s, border 0.2s;
+    }
+    .q:hover { transform: translateY(-3px); border-color: rgba(139,92,246,0.4); }
+    .q p { font-style: italic; line-height: 1.55; margin: 0 0 12px; }
+    .q .who { color: #c4b5fd; font-weight: 700; font-size: 13px; }
+    .q form { position: absolute; top: 8px; right: 8px; margin: 0; }
+    .q .delete { background: transparent; box-shadow: none; color: var(--muted); padding: 4px 8px; opacity: 0; }
+    .q:hover .delete { opacity: 1; }
+    .q .delete:hover { color: var(--red); transform: none; }
+    @media (max-width: 760px) { .q .delete { opacity: 1; } .quote-form .row { flex-wrap: wrap; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>💬 <span class="gradient-text">Quotes</span></h1>
+<p class="muted" style="margin:6px 0 28px">Words that keep you going. They rotate in the sidebar on every page.</p>
+
+<div class="card">
+    <h2>Add a quote</h2>
+    <form class="quote-form" method="POST" action="/add-quote">
+        <textarea name="text" placeholder="Type or paste the quote or verse..." required></textarea>
+        <div class="row">
+            <input type="text" name="author" placeholder="Who said it / verse (e.g. Psalm 23:1)">
+            <button type="submit">+ Add quote</button>
+        </div>
+    </form>
+</div>
+
+<div class="grid">
+    {% for q in quotes %}
+    <div class="q">
+        <form method="POST" action="/delete-quote/{{ q.id }}">
+            <button class="delete" title="Delete">🗑</button>
+        </form>
+        <p>“{{ q.text }}”</p>
+        {% if q.author %}<div class="who">— {{ q.author }}</div>{% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

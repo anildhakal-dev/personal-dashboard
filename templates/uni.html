@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 22px; }
+    .stat { margin: 0; }
+    .stat .label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .stat .big { font-size: 26px; font-weight: 800; line-height: 1.15; }
+    .stat .small { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+    /* Weekly timetable: one column per day */
+    .week { display: grid; grid-template-columns: repeat({{ week|length }}, 1fr); gap: 12px; }
+    .day { min-width: 0; }
+    .day h3 {
+        font-size: 13px; text-transform: uppercase; letter-spacing: 1px;
+        color: var(--muted); margin: 0 0 10px; padding: 8px 10px; border-radius: 10px;
+    }
+    .day.today h3 { color: white; background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(236,72,153,0.2)); }
+    .class {
+        position: relative;
+        padding: 12px 12px 10px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.04);
+        border-left: 4px solid var(--c);
+        margin-bottom: 10px;
+        transition: transform 0.2s;
+    }
+    .class:hover { transform: translateY(-2px); background: rgba(255,255,255,0.07); }
+    .class .time { font-size: 12px; font-weight: 700; color: var(--c); }
+    .class .mod { font-weight: 700; margin: 4px 0 2px; font-size: 14px; }
+    .class .meta { font-size: 12px; color: var(--muted); }
+    .free { font-size: 13px; color: var(--muted); padding: 10px; text-align: center; border: 1px dashed var(--border); border-radius: 12px; }
+
+    /* Little delete buttons that appear on hover */
+    .x { position: absolute; top: 6px; right: 6px; margin: 0; }
+    .x button { background: transparent; box-shadow: none; color: var(--muted); padding: 2px 6px; font-size: 12px; opacity: 0; }
+    .class:hover .x button, .dl:hover .x button { opacity: 1; }
+    .x button:hover { color: var(--red); transform: none; box-shadow: none; }
+
+    /* Add forms */
+    .add-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+    .add-form .grow { flex: 1; min-width: 150px; }
+    details summary { cursor: pointer; color: #c4b5fd; font-weight: 600; font-size: 14px; list-style: none; }
+    details summary::-webkit-details-marker { display: none; }
+
+    /* Deadlines */
+    .dl {
+        position: relative;
+        display: flex; align-items: center; gap: 14px;
+        padding: 14px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.03);
+        margin-bottom: 8px;
+        border-left: 4px solid var(--c);
+    }
+    .dl .info { flex: 1; min-width: 0; }
+    .dl .t { font-weight: 600; }
+    .dl .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .dl.done { opacity: 0.45; }
+    .dl.done .t { text-decoration: line-through; }
+    .dl form { margin: 0; }
+    .tick {
+        width: 24px; height: 24px; padding: 0; border-radius: 7px;
+        background: transparent; border: 2px solid var(--purple); box-shadow: none; font-size: 13px;
+    }
+    .dl.done .tick { background: linear-gradient(135deg, var(--green), var(--cyan)); border-color: transparent; }
+    .kind { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; margin-left: 6px; }
+    .kind.Exam { background: rgba(236,72,153,0.18); color: #f9a8d4; }
+    .kind.Assignment { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+    .count { font-weight: 800; font-size: 14px; white-space: nowrap; padding: 6px 12px; border-radius: 20px; margin-right: 22px; }
+    .count.red { background: rgba(248,113,113,0.15); color: #fca5a5; box-shadow: 0 0 14px rgba(248,113,113,0.25); }
+    .count.orange { background: rgba(251,146,60,0.15); color: #fdba74; }
+    .count.grey { background: rgba(255,255,255,0.06); color: var(--muted); }
+
+    @media (max-width: 1000px) { .week { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 760px) {
+        .stats { grid-template-columns: 1fr; }
+        .week { grid-template-columns: 1fr; }
+        .x button { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>🎓 <span class="gradient-text">Uni</span></h1>
+<p class="muted" style="margin:6px 0 28px">Your week, your deadlines, your exams.</p>
+
+<!-- Top boxes -->
+<div class="stats">
+    <div class="card stat">
+        <div class="label">📍 Today</div>
+        {% if today_classes %}
+            <div class="big">{{ today_classes|length }} class{{ "es" if today_classes|length != 1 }}</div>
+            <div class="small">First: {{ today_classes[0].module }} at {{ today_classes[0].start }}</div>
+        {% else %}
+            <div class="big">No classes</div>
+            <div class="small">Free day for study</div>
+        {% endif %}
+    </div>
+    <div class="card stat">
+        <div class="label">⏳ Next deadline</div>
+        {% if upcoming %}
+            <div class="big">{{ upcoming[0].label }}</div>
+            <div class="small">{{ upcoming[0].title }}</div>
+        {% else %}
+            <div class="big">Nothing due</div>
+            <div class="small">Add one below</div>
+        {% endif %}
+    </div>
+    <div class="card stat">
+        <div class="label">📝 Next exam</div>
+        {% if next_exam %}
+            <div class="big">{{ next_exam.label }}</div>
+            <div class="small">{{ next_exam.title }} · {{ next_exam.nice_date }}</div>
+        {% else %}
+            <div class="big">None yet</div>
+            <div class="small">Add exams as a deadline</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Weekly timetable -->
+<div class="card">
+    <h2>🗓 Weekly timetable</h2>
+    <div class="week">
+        {% for day in week %}
+        <div class="day {% if day.index == today_index %}today{% endif %}">
+            <h3>{{ day.name[:3] }}</h3>
+            {% for c in day.classes %}
+            <div class="class" style="--c: {{ colour_of[c.module] }}">
+                <form class="x" method="POST" action="/delete-class/{{ c.id }}"><button title="Delete">✕</button></form>
+                <div class="time">{{ c.start }} – {{ c.end }}</div>
+                <div class="mod">{{ c.module }}</div>
+                <div class="meta">{{ c.kind }}{% if c.room %} · {{ c.room }}{% endif %}</div>
+            </div>
+            {% else %}
+            <div class="free">Free</div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <details>
+        <summary style="margin-top:18px">+ Add a class</summary>
+        <form class="add-form" method="POST" action="/add-class">
+            <input class="field grow" name="module" placeholder="Module (e.g. Business Law)" list="module-list" required>
+            <select class="field" name="kind">
+                <option>Lecture</option><option>Seminar</option><option>Workshop</option><option>Lab</option><option>Tutorial</option>
+            </select>
+            <select class="field" name="day">
+                {% for d in days %}<option value="{{ loop.index0 }}">{{ d }}</option>{% endfor %}
+            </select>
+            <input class="field" type="time" name="start" required>
+            <input class="field" type="time" name="end" required>
+            <input class="field" name="room" placeholder="Room">
+            <button type="submit">Add class</button>
+        </form>
+    </details>
+</div>
+
+<!-- Deadlines and exams -->
+<div class="card">
+    <h2>🎯 Deadlines &amp; exams</h2>
+    {% for d in deadlines %}
+    <div class="dl {% if d.done %}done{% endif %}" style="--c: {{ colour_of.get(d.module, '#8b90b0') }}">
+        <form method="POST" action="/toggle-deadline/{{ d.id }}">
+            <button class="tick" title="Mark done">{% if d.done %}✓{% endif %}</button>
+        </form>
+        <div class="info">
+            <div class="t">{{ d.title }} <span class="kind {{ d.kind }}">{{ d.kind }}</span></div>
+            <div class="meta">{% if d.module %}{{ d.module }} · {% endif %}{{ d.nice_date }}</div>
+        </div>
+        {% if not d.done %}<span class="count {{ d.urgency }}">{{ d.label }}</span>{% endif %}
+        <form class="x" method="POST" action="/delete-deadline/{{ d.id }}"><button title="Delete">✕</button></form>
+    </div>
+    {% else %}
+    <p class="muted">No deadlines yet.</p>
+    {% endfor %}
+
+    <form class="add-form" method="POST" action="/add-deadline">
+        <input class="field grow" name="title" placeholder="What is it? (e.g. Marketing essay)" required>
+        <input class="field" name="module" placeholder="Module" list="module-list">
+        <select class="field" name="kind"><option>Assignment</option><option>Exam</option></select>
+        <input class="field" type="date" name="due" required>
+        <button type="submit">Add</button>
+    </form>
+</div>
+
+<!-- Suggests module names you've already used while typing -->
+<datalist id="module-list">
+    {% for m in modules %}<option value="{{ m }}">{% endfor %}
+</datalist>
+{% endblock %}

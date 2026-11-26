@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    /* Week strip: click a day to see its workout */
+    .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 22px; }
+    .day {
+        text-decoration: none; color: var(--text);
+        text-align: center; padding: 14px 6px;
+        border-radius: 16px;
+        background: var(--panel); border: 1px solid var(--border);
+        transition: transform 0.2s, border 0.2s;
+    }
+    .day:hover { transform: translateY(-3px); border-color: rgba(139,92,246,0.4); }
+    .day .d { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .day .i { font-size: 24px; margin: 6px 0 4px; }
+    .day .w { font-size: 12px; font-weight: 700; }
+    .day.rest { opacity: 0.5; }
+    .day.showing { border-color: var(--purple); background: linear-gradient(160deg, rgba(139,92,246,0.3), rgba(236,72,153,0.12)); }
+    .day.today .d { color: var(--cyan); font-weight: 800; }
+
+    .cols { display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px; align-items: start; }
+
+    /* Workout card */
+    .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .head h2 { margin: 0; font-size: 24px; }
+    .head form { margin: 0; display: flex; gap: 8px; }
+    .ex {
+        position: relative;
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        padding: 14px 16px; border-radius: 14px;
+        background: rgba(255,255,255,0.03); margin-bottom: 8px;
+        border: 1px solid transparent;
+    }
+    .ex:hover { border-color: var(--border); }
+    .ex .num {
+        width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+        display: grid; place-items: center; font-weight: 800; font-size: 13px;
+        background: rgba(139,92,246,0.18); color: #c4b5fd;
+    }
+    .ex .info { flex: 1; min-width: 160px; }
+    .ex .n { font-weight: 600; }
+    .ex .sr { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .ex .last { font-size: 12px; color: var(--cyan); margin-top: 2px; }
+    .log { display: flex; gap: 6px; margin: 0; }
+    .log .field { width: 70px; padding: 8px 10px; }
+    .log button { padding: 8px 12px; box-shadow: none; }
+    .ex .x { position: absolute; top: 4px; right: 6px; margin: 0; }
+    .ex .x button { background: none; box-shadow: none; color: var(--muted); padding: 2px 6px; font-size: 11px; opacity: 0; }
+    .ex:hover .x button { opacity: 1; }
+    .x button:hover { color: var(--red); transform: none; }
+    .rest-box { text-align: center; padding: 30px 0; color: var(--muted); }
+    .rest-box .big { font-size: 46px; }
+    .free-note { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+    .add-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .add-form .grow { flex: 1; min-width: 150px; }
+    details summary { cursor: pointer; color: #c4b5fd; font-weight: 600; font-size: 14px; margin-top: 14px; list-style: none; }
+
+    .sets { font-size: 13px; color: var(--muted); }
+    .sets div { padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .sets b { color: var(--text); }
+
+    /* Protein ring: fills up to 150g */
+    .protein-top { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; }
+    .ring {
+        width: 110px; height: 110px; border-radius: 50%; flex-shrink: 0;
+        background: conic-gradient(var(--green) calc({{ protein_pct }} * 1%), rgba(255,255,255,0.08) 0);
+        display: grid; place-items: center;
+        {% if protein >= pmin %}box-shadow: 0 0 30px rgba(52,211,153,0.4);{% endif %}
+    }
+    .ring .inner {
+        width: 88px; height: 88px; border-radius: 50%; background: #151827;
+        display: grid; place-items: center; text-align: center;
+    }
+    .ring .g { font-size: 24px; font-weight: 800; line-height: 1; }
+    .ring .of { font-size: 11px; color: var(--muted); }
+    .pmsg { font-size: 20px; font-weight: 800; }
+    .foods { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .foods form { margin: 0; }
+    .chip {
+        background: rgba(52,211,153,0.12); color: #6ee7b7;
+        border: 1px solid rgba(52,211,153,0.25);
+        box-shadow: none; padding: 8px 12px; font-size: 13px; font-weight: 600;
+    }
+    .chip:hover { background: rgba(52,211,153,0.22); box-shadow: none; }
+    .eaten { font-size: 13px; }
+    .eaten .row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .eaten form { margin: 0; }
+    .eaten button { background: none; box-shadow: none; color: var(--muted); padding: 2px 6px; font-size: 11px; }
+    .eaten button:hover { color: var(--red); transform: none; }
+    .small-form { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .small-form .field { padding: 9px 11px; }
+    .small-form .grow { flex: 1; min-width: 120px; }
+    .small-form label { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+    .toast { background: rgba(52,211,153,0.15); color: #6ee7b7; padding: 8px 12px; border-radius: 10px; font-size: 13px; margin-top: 10px; }
+
+    @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) {
+        .week { grid-template-columns: repeat(4, 1fr); }
+        .ex .x button { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>🏋️ <span class="gradient-text">Gym &amp; protein</span></h1>
+<p class="muted" style="margin:6px 0 28px">Train hard, hit {{ pmin }}-{{ pmax }}g protein.</p>
+
+<!-- Week strip -->
+<div class="week">
+    {% for d in week %}
+    <a href="/gym?day={{ d.index }}" class="day {% if d.index == show_day %}showing{% endif %} {% if d.index == today_index %}today{% endif %} {% if d.workout == 'Rest' %}rest{% endif %}">
+        <div class="d">{{ "Today" if d.index == today_index else d.name }}</div>
+        <div class="i">{{ d.icon }}</div>
+        <div class="w">{{ d.workout }}</div>
+    </a>
+    {% endfor %}
+</div>
+
+<div class="cols">
+    <!-- Left: the workout -->
+    <div>
+        <div class="card">
+            <div class="head">
+                <h2>{{ icon }} {{ day_name }}: <span class="gradient-text">{{ workout }}</span></h2>
+                <!-- Change this day's workout -->
+                <form method="POST" action="/set-workout">
+                    <input type="hidden" name="day" value="{{ show_day }}">
+                    <select class="field" name="workout" onchange="this.form.submit()">
+                        {% for o in options %}<option {% if o == workout %}selected{% endif %}>{{ o }}</option>{% endfor %}
+                    </select>
+                </form>
+            </div>
+
+            {% if workout == "Rest" %}
+                <div class="rest-box"><div class="big">😴</div><p>Rest day. Recover, eat your protein.</p></div>
+            {% else %}
+                {% if not exercises %}
+                <p class="free-note">Freestyle day. Log whatever you do below, or add your usual exercises.</p>
+                {% endif %}
+
+                {% for ex in exercises %}
+                <div class="ex">
+                    <div class="num">{{ loop.index }}</div>
+                    <div class="info">
+                        <div class="n">{{ ex.name }}</div>
+                        <div class="sr">{{ ex.sets_reps }}</div>
+                        {% if last[ex.name] %}
+                        <div class="last">Last: {% if last[ex.name].weight %}{{ last[ex.name].weight|round(1) }}kg{% endif %}{% if last[ex.name].reps %} × {{ last[ex.name].reps }}{% endif %}</div>
+                        {% endif %}
+                    </div>
+                    <!-- Log a set -->
+                    <form class="log" method="POST" action="/log-set">
+                        <input type="hidden" name="exercise" value="{{ ex.name }}">
+                        <input type="hidden" name="day" value="{{ show_day }}">
+                        <input class="field" type="number" step="0.5" name="weight" placeholder="kg">
+                        <input class="field" type="number" name="reps" placeholder="reps">
+                        <button type="submit">✓</button>
+                    </form>
+                    <form class="x" method="POST" action="/delete-exercise/{{ ex.id }}">
+                        <input type="hidden" name="day" value="{{ show_day }}">
+                        <button title="Remove exercise">✕</button>
+                    </form>
+                </div>
+                {% endfor %}
+
+                <!-- Log something not on the list (great for legs / arms days) -->
+                <form class="add-form" method="POST" action="/log-set">
+                    <input type="hidden" name="day" value="{{ show_day }}">
+                    <input class="field grow" name="exercise" placeholder="Log another exercise..." required>
+                    <input class="field" style="width:80px" type="number" step="0.5" name="weight" placeholder="kg">
+                    <input class="field" style="width:80px" type="number" name="reps" placeholder="reps">
+                    <button type="submit">Log</button>
+                </form>
+
+                <details>
+                    <summary>+ Add an exercise to {{ workout }}</summary>
+                    <form class="add-form" method="POST" action="/add-exercise">
+                        <input type="hidden" name="workout" value="{{ workout }}">
+                        <input type="hidden" name="day" value="{{ show_day }}">
+                        <input class="field grow" name="name" placeholder="Exercise" required>
+                        <input class="field" name="sets_reps" placeholder="3 × 10">
+                        <button type="submit">Add</button>
+                    </form>
+                </details>
+            {% endif %}
+        </div>
+
+        {% if todays_sets %}
+        <div class="card">
+            <h2>📈 Logged today</h2>
+            <div class="sets">
+                {% for s in todays_sets %}
+                <div><b>{{ s.exercise }}</b>{% if s.weight %} · {{ s.weight|round(1) }}kg{% endif %}{% if s.reps %} × {{ s.reps }}{% endif %}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right: protein -->
+    <div>
+        <div class="card">
+            <h2>🍗 Protein today</h2>
+            <div class="protein-top">
+                <div class="ring"><div class="inner"><div><div class="g">{{ protein }}g</div><div class="of">of {{ pmin }}-{{ pmax }}g</div></div></div></div>
+                <div>
+                    <div class="pmsg">{{ protein_msg }}</div>
+                    <div class="muted" style="font-size:13px;margin-top:4px">Tap a food to add it</div>
+                </div>
+            </div>
+
+            <!-- One-tap foods -->
+            <div class="foods">
+                {% for f in foods %}
+                <form method="POST" action="/eat">
+                    <input type="hidden" name="food" value="{{ f.name }}">
+                    <input type="hidden" name="protein" value="{{ f.protein }}">
+                    <button class="chip">{{ f.name }} · {{ f.protein }}g</button>
+                </form>
+                {% endfor %}
+            </div>
+
+            <div class="eaten">
+                {% for e in eaten %}
+                <div class="row">
+                    <span>{{ e.food }} <b>{{ e.protein }}g</b></span>
+                    <form method="POST" action="/delete-eaten/{{ e.id }}"><button title="Remove">✕</button></form>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Something else -->
+            <form class="small-form" method="POST" action="/eat">
+                <input class="field grow" name="food" placeholder="Other food" required>
+                <input class="field" style="width:80px" type="number" name="protein" placeholder="g" required>
+                <button type="submit">Add</button>
+                <label><input type="checkbox" name="save" value="1"> save as quick food</label>
+            </form>
+        </div>
+
+        <!-- Meal prep goes to your to-do list -->
+        <div class="card">
+            <h2>🥘 Meal prep</h2>
+            <p class="muted" style="font-size:13px;margin:0">Adds a task to your to-do list on Home.</p>
+            <form class="small-form" method="POST" action="/add-prep">
+                <input class="field grow" name="what" placeholder="e.g. Chicken legs for 3 days" required>
+                <input class="field" type="date" name="due">
+                <button type="submit">Add to to-do</button>
+            </form>
+            {% if request.args.get('prep') %}<div class="toast">✓ Added to your to-do list</div>{% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
