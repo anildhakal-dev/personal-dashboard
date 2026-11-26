@@ -1305,6 +1305,11 @@ import planner
 app.register_blueprint(planner.bp)
 
 
+# ---------- Study (study.py) ----------
+import study
+app.register_blueprint(study.bp)
+
+
 setup_database()
 
 if __name__ == "__main__":

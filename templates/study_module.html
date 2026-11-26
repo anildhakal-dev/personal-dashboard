@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 1250px; }
+    .top { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
+    .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+    .top h1 { font-size: 28px; }
+    .pill { font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--c); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+
+    /* Chat */
+    .chat { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .thread { padding: 22px 22px 8px; max-height: 64vh; min-height: 300px; overflow-y: auto; }
+    .msg { margin-bottom: 16px; display: flex; }
+    .msg.user { justify-content: flex-end; }
+    .bubble { max-width: 88%; padding: 12px 16px; border-radius: 16px; font-size: 14.5px; line-height: 1.6; overflow-wrap: anywhere; }
+    .msg.user .bubble { background: linear-gradient(135deg, rgba(139,92,246,0.4), rgba(236,72,153,0.28)); border-bottom-right-radius: 4px; }
+    .msg.assistant .bubble { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .bubble p { margin: 0 0 8px; } .bubble p:last-child { margin-bottom: 0; }
+    .bubble ul, .bubble ol { margin: 4px 0 8px; padding-left: 20px; }
+    .bubble h4 { margin: 10px 0 6px; font-size: 15px; }
+    .bubble code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 5px; }
+    .files { font-size: 12px; opacity: 0.8; margin-top: 6px; }
+    .open-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 700; color: #c4b5fd; text-decoration: none; padding: 6px 12px; border-radius: 10px; background: rgba(139,92,246,0.15); }
+    .hello { color: var(--muted); font-size: 14px; line-height: 1.7; padding: 10px 4px; }
+    .hello b { color: var(--text); }
+
+    .composer { border-top: 1px solid var(--border); padding: 14px; background: rgba(0,0,0,0.15); }
+    .composer textarea { width: 100%; resize: vertical; min-height: 56px; display: block; }
+    .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+    .attach { cursor: pointer; font-size: 13px; font-weight: 600; color: #c4b5fd; padding: 10px 14px; border-radius: 12px; border: 1px dashed rgba(139,92,246,0.5); }
+    .attach input { display: none; }
+    .row select { flex: 1; min-width: 170px; }
+    #picked { font-size: 12px; color: var(--muted); width: 100%; }
+    .error { background: rgba(248,113,113,0.12); color: #fca5a5; padding: 10px 14px; border-radius: 12px; font-size: 13px; margin: 0 14px 10px; }
+    .working { display: none; font-size: 13px; color: #c4b5fd; margin-top: 10px; }
+    .sending .working { display: block; }
+    .sending button[type=submit] { opacity: 0.5; pointer-events: none; }
+
+    /* Side panels */
+    .side .card { padding: 20px; }
+    .side h2 { font-size: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .count { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .brief { border-radius: 14px; background: rgba(255,255,255,0.03); padding: 12px 14px; margin-bottom: 10px; border-left: 3px solid var(--c); }
+    .brief summary { cursor: pointer; font-weight: 700; font-size: 14px; list-style: none; }
+    .brief summary::-webkit-details-marker { display: none; }
+    .brief .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .brief h5 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+    .brief ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; }
+    .brief p { font-size: 13px; line-height: 1.55; margin: 6px 0 0; }
+    .gap { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; }
+    .gap:last-child { border-bottom: none; }
+    .gap form { margin: 0; }
+    .tick { width: 22px; height: 22px; padding: 0; border-radius: 7px; background: transparent; border: 2px solid var(--red); box-shadow: none; flex-shrink: 0; }
+    .gap .fix { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .note-link { display: block; padding: 10px 12px; border-radius: 12px; text-decoration: none; color: var(--text); background: rgba(255,255,255,0.03); margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+    .note-link:hover { background: rgba(255,255,255,0.07); }
+    .note-link span { display: block; font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 2px; }
+    .dl { font-size: 13px; padding: 6px 0; }
+    .none { font-size: 13px; color: var(--muted); }
+    .small-btn { background: transparent; box-shadow: none; color: var(--muted); padding: 4px 8px; font-size: 12px; }
+    .small-btn:hover { color: var(--red); transform: none; box-shadow: none; }
+
+    @media (max-width: 900px) {
+        .layout { grid-template-columns: 1fr; }
+        .thread { max-height: 70vh; }
+        .bubble { max-width: 94%; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="top" style="--c: {{ colour }}">
+    <a class="back" href="/study">← Study</a>
+    <h1>{{ name }}</h1>
+    {% if next %}<span class="pill">Next: {{ next }}</span>{% endif %}
+</div>
+
+<div class="layout">
+    <!-- Chat with Claude about this module -->
+    <div class="card chat">
+        <div class="thread" id="thread">
+            {% if not chat %}
+            <div class="hello">
+                Attach <b>lecture or seminar slides</b> and I'll write your notes, link them to your assignments and flag any gaps.<br>
+                Attach an <b>assignment brief or marking criteria</b> and I'll pull out exactly what a 1st needs.<br>
+                Or just <b>ask</b> me anything about {{ name }}.
+            </div>
+            {% endif %}
+            {% for m in chat %}
+            <div class="msg {{ m.role }}">
+                <div class="bubble">
+                    {{ m.content | md }}
+                    {% if m.files %}<div class="files">📎 {{ m.files }}</div>{% endif %}
+                    {% if m.note_id %}<a class="open-link" href="/study/note/{{ m.note_id }}">Open the notes →</a>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            <div id="bottom"></div>
+        </div>
+
+        {% if error %}<div class="error">⚠️ {{ error }}</div>{% endif %}
+        <form class="composer" id="composer" action="/study/send" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="module" value="{{ name }}">
+            <textarea class="field" name="message" id="message" placeholder="Ask about {{ name }}, or add a note for the files…"></textarea>
+            <div class="row">
+                <label class="attach">📎 Attach
+                    <input type="file" name="files" id="files" multiple
+                           accept=".pdf,.pptx,.docx,.txt,.md,image/*">
+                </label>
+                <select class="field" name="kind" id="kind">
+                    <option value="question">💬 Just a question</option>
+                    <option value="lecture">📑 Lecture slides → make notes</option>
+                    <option value="seminar">🗂️ Seminar → make notes</option>
+                    <option value="brief">📋 Assignment brief / marking criteria</option>
+                </select>
+                <button type="submit">Send</button>
+                <div id="picked"></div>
+            </div>
+            <div class="working">⏳ Claude is reading… big slide decks can take a minute or two. Keep this page open.</div>
+        </form>
+    </div>
+
+    <!-- What this module needs -->
+    <div class="side">
+        <div class="card">
+            <h2>📋 Assignments <span class="count">{{ briefs|length }}</span></h2>
+            {% for b in briefs %}
+            <details class="brief" style="--c: {{ colour }}">
+                <summary>{{ b.data.title }}</summary>
+                <div class="meta">{{ b.data.kind }}{% if b.data.due %} · due {{ b.data.due }}{% endif %}{% if b.data.weighting %} · {{ b.data.weighting }}{% endif %}{% if b.data.length %} · {{ b.data.length }}{% endif %}</div>
+                <p>{{ b.data.task | mdi }}</p>
+                {% if b.data.requirements %}<h5>Must do</h5><ul>{% for r in b.data.requirements %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+                {% if b.data.first_class %}<h5>What a 1st looks like</h5><ul>{% for r in b.data.first_class %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+                {% if b.data.topics_needed %}<h5>Knowledge needed</h5><ul>{% for r in b.data.topics_needed %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+                <form action="/study/brief/{{ b.id }}/delete" method="post" onsubmit="return confirm('Delete this brief?')">
+                    <button class="small-btn">Delete brief</button>
+                </form>
+            </details>
+            {% else %}
+            <div class="none">No briefs yet. Attach one in the chat and pick "Assignment brief".</div>
+            {% endfor %}
+            {% for d in deadlines %}
+            <div class="dl">⏳ <b>{{ d.title }}</b> · {{ d.nice }} <span class="muted">({{ 'today' if d.days == 0 else 'in ' ~ d.days ~ ' days' }})</span></div>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <h2>⚠️ Gaps to close <span class="count">{{ gaps|length }}</span></h2>
+            {% for g in gaps %}
+            <div class="gap">
+                <form action="/study/gap/{{ g.id }}" method="post"><button class="tick" title="Sorted"></button></form>
+                <div><b>{{ g.gap | mdi }}</b><div class="fix">{{ g.fix | mdi }}</div></div>
+            </div>
+            {% else %}
+            <div class="none">No open gaps. Tick them off here as you close them.</div>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <h2>📝 Notes <span class="count">{{ notes|length }}</span></h2>
+            {% for n in notes %}
+            <a class="note-link" href="/study/note/{{ n.id }}">{{ n.title }}<span>{{ n.kind }} · {{ n.created[:10] }}</span></a>
+            {% else %}
+            <div class="none">No notes yet.</div>
+            {% endfor %}
+        </div>
+
+        {% if chat %}
+        <form action="/study/clear-chat" method="post" onsubmit="return confirm('Clear the chat? Notes and briefs stay.')">
+            <input type="hidden" name="module" value="{{ name }}">
+            <button class="small-btn">Clear chat (notes and briefs stay)</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Start the chat scrolled to the newest message
+    const thread = document.getElementById("thread");
+    thread.scrollTop = thread.scrollHeight;
+
+    // Show which files you picked, and guess what they are
+    const files = document.getElementById("files");
+    const kind = document.getElementById("kind");
+    files.addEventListener("change", function () {
+        const names = Array.from(files.files).map(f => f.name);
+        document.getElementById("picked").textContent = names.length ? "📎 " + names.join(", ") : "";
+        const all = names.join(" ").toLowerCase();
+        if (kind.value === "question" && names.length) {
+            if (/brief|criteria|rubric|assessment|assignment|coursework/.test(all)) kind.value = "brief";
+            else if (/seminar|workshop|tutorial/.test(all)) kind.value = "seminar";
+            else kind.value = "lecture";
+        }
+    });
+
+    // Enter sends, Shift+Enter makes a new line
+    document.getElementById("message").addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 760) {
+            e.preventDefault();
+            document.getElementById("composer").requestSubmit();
+        }
+    });
+
+    // While Claude works, show a message and stop double-sends
+    document.getElementById("composer").addEventListener("submit", function () {
+        this.classList.add("sending");
+    });
+</script>
+{% endblock %}
