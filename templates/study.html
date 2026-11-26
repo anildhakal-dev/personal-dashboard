@@ -11,7 +11,7 @@
         border-top: 3px solid var(--c);
         transition: transform 0.2s, background 0.2s;
     }
-    .module:hover { transform: translateY(-3px); background: rgba(255,255,255,0.07); }
+    .module:hover { transform: translateY(-3px); background: rgba(140,105,40,0.063); }
     /* soft glow in the module's colour */
     .module::after {
         content: ""; position: absolute; width: 160px; height: 160px; border-radius: 50%;
@@ -20,9 +20,10 @@
     .module .name { font-weight: 800; font-size: 18px; margin-bottom: 6px; }
     .module .next { font-size: 13px; color: var(--c); font-weight: 700; min-height: 18px; }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-    .chip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 20px; background: rgba(255,255,255,0.06); color: var(--muted); }
-    .chip.red { background: rgba(248,113,113,0.15); color: #fca5a5; }
-    .chip.green { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .chip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 20px; background: rgba(140,105,40,0.054); color: var(--muted); }
+    .chip.red { background: rgba(248,113,113,0.15); color: #c0392b; }
+    .chip.green { background: rgba(52,211,153,0.15); color: #0f8a5f; }
+    .chip.amber { background: rgba(251,146,60,0.15); color: #c2620a; }
     .due { margin-top: 14px; font-size: 13px; color: var(--muted); }
     .due b { color: var(--text); }
     .empty { text-align: center; padding: 40px; }
@@ -32,7 +33,7 @@
 {% block content %}
 <div class="head">
     <h1>📚 <span class="gradient-text">Study</span></h1>
-    <p class="muted">Pick a module. Attach slides for notes, a brief for what a 1st needs, or just ask.</p>
+    <p class="muted">A notebook for each module: add your sources, chat with them, and make flashcards, quizzes and mind maps.</p>
 </div>
 
 {% if modules %}
@@ -42,10 +43,10 @@
         <div class="name">{{ m.name }}</div>
         <div class="next">{% if m.next %}Next: {{ m.next }}{% endif %}</div>
         <div class="chips">
-            <span class="chip">📝 {{ m.notes }} note{{ '' if m.notes == 1 else 's' }}</span>
-            <span class="chip">📋 {{ m.briefs }} brief{{ '' if m.briefs == 1 else 's' }}</span>
+            <span class="chip">📚 {{ m.sources }} source{{ '' if m.sources == 1 else 's' }}</span>
             {% if m.gaps %}<span class="chip red">⚠️ {{ m.gaps }} gap{{ '' if m.gaps == 1 else 's' }}</span>
-            {% elif m.notes %}<span class="chip green">✓ no gaps</span>{% endif %}
+            {% elif m.sources %}<span class="chip green">✓ no gaps</span>{% endif %}
+            {% if m.deck %}<span class="chip {{ {'green': 'green', 'amber': 'amber', 'red': 'red'}.get(m.deck.light, '') }}">🃏 {{ m.decks_due }} deck{{ '' if m.decks_due == 1 else 's' }} · {{ m.deck.label }}</span>{% endif %}
         </div>
         {% if m.deadline %}
         <div class="due">⏳ <b>{{ m.deadline.title }}</b> · {{ m.deadline.nice }}
@@ -55,6 +56,6 @@
     {% endfor %}
 </div>
 {% else %}
-<div class="card empty muted">No modules yet. Add your timetable on the <a href="/uni" style="color:#c4b5fd">Uni page</a> first.</div>
+<div class="card empty muted">No modules yet. Add your timetable on the <a href="/uni" style="color:#a87b0f">Uni page</a> first.</div>
 {% endif %}
 {% endblock %}

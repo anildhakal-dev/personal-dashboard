@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 760px; }
+    .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+    .head { margin: 12px 0 20px; }
+    .head h1 { font-size: 28px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+    .chip { font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 20px; background: rgba(140,105,40,0.054); color: var(--muted); }
+    .light.green { background: rgba(52,211,153,0.16); color: #0f8a5f; }
+    .light.amber { background: rgba(251,146,60,0.16); color: #c2620a; }
+    .light.red { background: rgba(248,113,113,0.16); color: #c0392b; }
+    details.due summary { cursor: pointer; font-size: 12.5px; color: #a87b0f; list-style: none; font-weight: 600; }
+    details.due summary::-webkit-details-marker { display: none; }
+    details.due form { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    details.due button { padding: 9px 14px; }
+
+    .start { text-align: center; padding: 34px 24px; }
+    .start .big { font-size: 46px; margin-bottom: 6px; }
+    .start p { color: var(--muted); line-height: 1.6; }
+    .start .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+    .alt { background: rgba(140,105,40,0.063); box-shadow: none; color: var(--text); }
+    .alt:hover { box-shadow: none; }
+
+    .bar { display: flex; height: 8px; border-radius: 8px; overflow: hidden; background: rgba(140,105,40,0.054); margin-bottom: 8px; }
+    .bar div { transition: width 0.3s; }
+    .bar .g { background: var(--green); } .bar .a { background: #fb923c; } .bar .r { background: var(--red); }
+    .counts { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+
+    .card-box { min-height: 300px; display: flex; flex-direction: column; justify-content: center; position: relative; padding: 30px 28px; transition: border-color 0.3s, box-shadow 0.3s; }
+    .card-box.green { border-color: rgba(52,211,153,0.7); box-shadow: 0 0 30px rgba(52,211,153,0.2); }
+    .card-box.amber { border-color: rgba(251,146,60,0.7); box-shadow: 0 0 30px rgba(251,146,60,0.2); }
+    .card-box.red { border-color: rgba(248,113,113,0.7); box-shadow: 0 0 30px rgba(248,113,113,0.2); }
+    .type { position: absolute; top: 16px; left: 20px; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+    .front { font-size: 20px; font-weight: 700; line-height: 1.45; text-align: center; margin: 14px 0; }
+    .back { display: none; font-size: 16px; line-height: 1.6; text-align: center; padding-top: 16px; margin-top: 8px; border-top: 1px dashed var(--border); animation: fadeup 0.35s; }
+    .back.show { display: block; }
+    @keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .feedback { font-size: 14px; text-align: center; margin-top: 10px; font-weight: 600; }
+    .options { display: grid; gap: 8px; margin-top: 10px; }
+    .opt { text-align: left; background: rgba(140,105,40,0.036); border: 1px solid var(--border); box-shadow: none; color: var(--text); font-weight: 500; padding: 13px 16px; }
+    .opt:hover { background: rgba(212,160,23,0.14); transform: none; box-shadow: none; }
+    .opt.right { background: rgba(52,211,153,0.18); border-color: var(--green); }
+    .opt.wrong { background: rgba(248,113,113,0.18); border-color: var(--red); }
+    .typed { display: flex; gap: 8px; margin-top: 10px; }
+    .typed input { flex: 1; font-size: 16px; }
+
+    .actions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+    .lights { display: none; gap: 10px; justify-content: center; margin-top: 18px; }
+    .lights.show { display: flex; }
+    .lb { flex: 1; max-width: 160px; box-shadow: none; padding: 13px 10px; color: #faf7f0; font-weight: 800; }
+    .lb.g { background: var(--green); } .lb.a { background: #fb923c; } .lb.r { background: var(--red); }
+    .lb:hover { box-shadow: none; }
+    .override { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; display: none; }
+    .override a { color: #a87b0f; cursor: pointer; margin: 0 4px; }
+
+    .result { text-align: center; padding: 34px 24px; }
+    .score { font-size: 64px; font-weight: 800; line-height: 1; }
+    .score.pass { color: var(--green); text-shadow: 0 0 30px rgba(52,211,153,0.5); }
+    .score.fail { color: #c2620a; }
+
+    .list summary { cursor: pointer; font-weight: 700; list-style: none; }
+    .list summary::-webkit-details-marker { display: none; }
+    .row { padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; display: flex; gap: 10px; }
+    .row:last-child { border-bottom: none; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; background: rgba(140,105,40,0.135); }
+    .dot.green { background: var(--green); } .dot.amber { background: #fb923c; } .dot.red { background: var(--red); }
+    .row .a { color: var(--muted); }
+    .runs { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    .del { background: transparent; box-shadow: none; color: var(--muted); font-size: 12px; padding: 4px 8px; }
+    .del:hover { color: var(--red); transform: none; box-shadow: none; }
+    @media (max-width: 760px) { .front { font-size: 18px; } .card-box { padding: 30px 18px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="back" href="/study/module?m={{ deck.module | urlencode }}">← {{ deck.module }}</a>
+<div class="head">
+    <h1>🃏 {{ deck.title }}</h1>
+    <div class="meta">
+        <span class="chip light {{ light }}">{{ label }}</span>
+        <span class="chip">{{ cards|length }} cards</span>
+        <span class="chip">Pass mark {{ deck.pass_mark }}%</span>
+        {% if deck.best is not none %}<span class="chip">Best {{ deck.best }}%</span>{% endif %}
+        <details class="due"><summary>✎ Change deadline</summary>
+            <form action="/study/deck/{{ deck.id }}/deadline" method="post">
+                <input class="field" type="date" name="date" value="{{ due_date }}" required>
+                <input class="field" type="time" name="time" value="{{ due_time or '21:00' }}">
+                <button>Save</button>
+            </form>
+        </details>
+    </div>
+</div>
+
+<div id="stage"></div>
+
+<details class="card list" style="margin-top:22px">
+    <summary>📋 All cards</summary>
+    {% for c in cards %}
+    <div class="row"><span class="dot {{ c.last or '' }}"></span>
+        <div><b>{{ c.front | mdi }}</b><div class="a">{{ c.back | mdi }}</div></div></div>
+    {% endfor %}
+    {% if runs %}<div class="runs">Recent goes: {% for r in runs %}{{ r.score }}%{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+    <form action="/study/deck/{{ deck.id }}/delete" method="post" onsubmit="return confirm('Delete this deck?')" style="text-align:right">
+        <button class="del">Delete deck</button>
+    </form>
+</details>
+
+<script>
+const CARDS = {{ cards | tojson }};
+const DECK = {{ deck.id }};
+const PASS = {{ deck.pass_mark }};
+const stage = document.getElementById("stage");
+let queue = [], i = 0, results = {}, full = true;
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]))
+                          .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+const shuffle = a => { for (let k = a.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [a[k], a[j]] = [a[j], a[k]]; } return a; };
+const weak = () => CARDS.filter(c => c.last === "red" || c.last === "amber");
+
+function startScreen() {
+    const w = weak().length;
+    stage.innerHTML = `<div class="card start"><div class="big">🃏</div>
+        <p>${CARDS.length} cards. Get <b>${PASS}%</b> green in one full go to complete this deck.<br>
+        Cards you got red or amber last time come first.</p>
+        <div class="btns"><button onclick="start(false)">Start all ${CARDS.length}</button>
+        ${w ? `<button class="alt" onclick="start(true)">Just red &amp; amber (${w})</button>` : ""}</div></div>`;
+}
+
+function start(weakOnly) {
+    full = !weakOnly;
+    const order = {red: 0, amber: 1, null: 2, green: 3};
+    const pool = weakOnly ? weak() : CARDS.slice();
+    queue = shuffle(pool).sort((a, b) => order[a.last] - order[b.last]);
+    i = 0; results = {};
+    show();
+}
+
+function counts() {
+    const v = Object.values(results);
+    return {g: v.filter(x => x === "green").length, a: v.filter(x => x === "amber").length, r: v.filter(x => x === "red").length};
+}
+
+function show() {
+    if (i >= queue.length) return finish();
+    const c = queue[i], n = counts(), t = queue.length;
+    const label = {flip: "Flip card", mcq: "Multiple choice", typed: "Type the answer"}[c.type];
+    let body = "";
+    if (c.type === "mcq") body = `<div class="options">${c.options.map((o, k) => `<button class="opt" onclick="pick(${k}, this)">${esc(o)}</button>`).join("")}</div>`;
+    else if (c.type === "typed") body = `<form class="typed" onsubmit="check(event)"><input class="field" id="ans" autocomplete="off" autocapitalize="off" placeholder="Type it (B0, R2, sigma^2 are fine)"><button>Check</button></form>`;
+    else body = `<div class="actions"><button onclick="turn()" id="turn">Turn over ↻</button></div>`;
+    stage.innerHTML = `
+        <div class="bar"><div class="g" style="width:${100*n.g/t}%"></div><div class="a" style="width:${100*n.a/t}%"></div><div class="r" style="width:${100*n.r/t}%"></div></div>
+        <div class="counts"><span>Card ${i + 1} of ${t}</span><span>🟢 ${n.g} · 🟠 ${n.a} · 🔴 ${n.r}</span></div>
+        <div class="card card-box" id="cb"><span class="type">${label}</span>
+            <div class="front">${esc(c.front)}</div>${body}
+            <div class="back" id="back">${esc(c.back)}</div>
+            <div class="feedback" id="fb"></div>
+            <div class="lights" id="lights">
+                <button class="lb g" onclick="rate('green')">Knew it</button>
+                <button class="lb a" onclick="rate('amber')">Unsure</button>
+                <button class="lb r" onclick="rate('red')">Didn't know</button></div>
+            <div class="override" id="ov">Disagree? Mark it <a onclick="rate('green')">green</a><a onclick="rate('amber')">amber</a><a onclick="rate('red')">red</a></div>
+            <div class="actions" id="next" style="display:none"><button onclick="next()">Next →</button></div>
+        </div>`;
+    const ans = document.getElementById("ans"); if (ans) ans.focus();
+}
+
+function turn() {
+    document.getElementById("back").classList.add("show");
+    document.getElementById("turn").remove();
+    document.getElementById("lights").classList.add("show");
+}
+
+let pending = null;
+function settle(light, feedback) {   // show the colour, then wait for Next
+    pending = light;
+    document.getElementById("cb").classList.add(light);
+    document.getElementById("back").classList.add("show");
+    if (feedback) document.getElementById("fb").textContent = feedback;
+    document.getElementById("next").style.display = "flex";
+}
+
+function pick(k, btn) {
+    const c = queue[i];
+    document.querySelectorAll(".opt").forEach((b, j) => { b.disabled = true; if (j === c.answer) b.classList.add("right"); });
+    if (k !== c.answer) btn.classList.add("wrong");
+    settle(k === c.answer ? "green" : "red");
+}
+
+async function check(e) {
+    e.preventDefault();
+    const input = document.getElementById("ans");
+    const btn = e.target.querySelector("button");
+    input.disabled = true; btn.disabled = true; btn.textContent = "Marking…";
+    let data;
+    try {
+        const r = await fetch("/study/mark", {method: "POST", headers: {"Content-Type": "application/json"},
+                              body: JSON.stringify({card_id: queue[i].id, answer: input.value})});
+        data = await r.json();
+    } catch (x) { data = {verdict: null, feedback: "Couldn't mark it. Mark yourself."}; }
+    btn.textContent = "Checked";
+    if (data.verdict) { settle(data.verdict, data.feedback); document.getElementById("ov").style.display = "block"; }
+    else { document.getElementById("back").classList.add("show"); document.getElementById("fb").textContent = data.feedback; document.getElementById("lights").classList.add("show"); }
+}
+
+function rate(light) {   // flip cards, or overriding the marker
+    if (pending === null) { pending = light; next(); }
+    else { const cb = document.getElementById("cb"); cb.classList.remove("green", "amber", "red"); cb.classList.add(light); pending = light; }
+}
+
+function next() {
+    const c = queue[i];
+    results[c.id] = pending; c.last = pending; pending = null;
+    fetch(`/study/card/${c.id}`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({result: c.last})});
+    i++; show();
+}
+
+async function finish() {
+    const n = counts();
+    const r = await fetch(`/study/deck/${DECK}/finish`, {method: "POST", headers: {"Content-Type": "application/json"},
+                         body: JSON.stringify({green: n.g, total: queue.length, full})});
+    const data = await r.json();
+    const w = weak().length;
+    stage.innerHTML = `<div class="card result">
+        <div class="score ${data.passed ? "pass" : "fail"}">${data.score}%</div>
+        <p style="font-size:17px;font-weight:700;margin:14px 0 4px">${data.passed ? "Deck complete ✓" : full ? `Not yet. You need ${PASS}%.` : "Practice round done"}</p>
+        <p class="muted">🟢 ${n.g} · 🟠 ${n.a} · 🔴 ${n.r}${full ? "" : " (a red & amber round doesn't count towards completing the deck)"}</p>
+        <div class="actions">${w ? `<button onclick="start(true)">Red &amp; amber again (${w})</button>` : ""}
+            <button class="alt" onclick="start(false)">Full deck again</button></div></div>`;
+}
+
+document.addEventListener("keydown", e => {   // keyboard: space turns, 1/2/3 rate, Enter next
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === " " && document.getElementById("turn")) { e.preventDefault(); turn(); }
+    else if (document.getElementById("lights")?.classList.contains("show") && pending === null && "123".includes(e.key))
+        rate({1: "green", 2: "amber", 3: "red"}[e.key]);
+    else if (e.key === "Enter" && document.getElementById("next")?.style.display === "flex") next();
+});
+
+startScreen();
+</script>
+{% endblock %}

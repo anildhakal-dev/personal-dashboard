@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% macro node(n, colour, depth) %}
+<li class="{{ 'closed' if depth >= 2 and n.children }}" style="--b: {{ colour }}">
+    <div class="node d{{ depth }}" data-title="{{ n.title }}" data-note="{{ n.note }}">
+        <span class="label">{{ n.title }}</span>
+        {% if n.children %}<button type="button" class="tog" title="Open / close">{{ n.children|length }}</button>{% endif %}
+    </div>
+    {% if n.children %}
+    <ul>{% for c in n.children %}{{ node(c, colour, depth + 1) }}{% endfor %}</ul>
+    {% endif %}
+</li>
+{% endmacro %}
+
+{% block extra_style %}
+<style>
+    main { max-width: none; }
+    .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0 16px; }
+    .head h1 { font-size: 26px; }
+    .tools { display: flex; gap: 8px; }
+    .tools button { background: rgba(140,105,40,0.063); box-shadow: none; color: var(--text); padding: 9px 14px; font-size: 13px; }
+    .tools button:hover { box-shadow: none; }
+    .canvas { overflow: auto; padding: 30px 26px; min-height: 60vh; }
+
+    /* The tree: each level sits to the right of its parent, joined by lines */
+    .mm, .mm ul { list-style: none; margin: 0; padding: 0; }
+    .mm ul { display: flex; flex-direction: column; justify-content: center; position: relative; padding-left: 40px; }
+    .mm li { display: flex; align-items: center; position: relative; padding: 5px 0; }
+    .mm ul > li::before { content: ""; position: absolute; left: -20px; top: 50%; width: 20px; border-top: 2px solid var(--line); }
+    .mm ul > li::after { content: ""; position: absolute; left: -20px; top: 0; bottom: 0; border-left: 2px solid var(--line); }
+    .mm ul > li:first-child::after { top: 50%; }
+    .mm ul > li:last-child::after { bottom: 50%; }
+    .mm ul > li:only-child::after { display: none; }
+    .mm ul::before { content: ""; position: absolute; left: 0; top: 50%; width: 20px; border-top: 2px solid var(--line); }
+    .mm li.closed > ul { display: none; }
+    .mm { --line: rgba(140,105,40,0.144); }
+    .mm li { --line: color-mix(in srgb, var(--b, #d4a017) 55%, transparent); }
+    .mm > li { --line: rgba(140,105,40,0.162); }
+
+    .node { display: flex; align-items: center; gap: 8px; padding: 9px 12px 9px 15px; border-radius: 13px; cursor: pointer; white-space: nowrap;
+            background: color-mix(in srgb, var(--b, #d4a017) 16%, #ffffff); border: 1px solid color-mix(in srgb, var(--b, #d4a017) 50%, transparent);
+            font-size: 13.5px; font-weight: 600; transition: transform 0.15s, box-shadow 0.15s; }
+    .node:hover { transform: translateY(-1px); box-shadow: 0 6px 20px color-mix(in srgb, var(--b, #d4a017) 35%, transparent); }
+    .node.d0 { font-size: 17px; font-weight: 800; padding: 14px 18px; background: var(--shine); border: none; color: var(--ink); }
+    .node.d1 { font-size: 15px; font-weight: 700; }
+    .node.d3 { font-weight: 500; font-size: 13px; }
+    .node.sel { outline: 2px solid var(--purple); }
+    .tog { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; font-size: 11px; font-weight: 800; box-shadow: none;
+           background: rgba(140,105,40,0.108); color: var(--text); }
+    .tog:hover { transform: none; box-shadow: none; background: rgba(140,105,40,0.225); }
+    li.closed > .node .tog { background: var(--b, #d4a017); color: #faf7f0; }
+
+    /* Info box when you tap an idea */
+    .info { position: fixed; right: 24px; bottom: 24px; width: min(360px, calc(100vw - 32px)); z-index: 40; background: #ffffff;
+            border: 1px solid rgba(212,160,23,0.45); border-radius: 16px; padding: 16px 18px; box-shadow: 0 20px 50px rgba(90,66,24,0.16); display: none; }
+    .info.show { display: block; animation: fadeup 0.25s; }
+    @keyframes fadeup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .info h3 { margin: 0 0 6px; font-size: 16px; padding-right: 24px; }
+    .info p { margin: 0 0 12px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+    .info .x { position: absolute; top: 10px; right: 10px; background: transparent; box-shadow: none; color: var(--muted); padding: 4px 8px; }
+    .info a button { width: 100%; padding: 10px; }
+    .del { background: transparent; box-shadow: none; color: var(--muted); font-size: 12px; padding: 4px 8px; }
+    .del:hover { color: var(--red); transform: none; box-shadow: none; }
+    @media (max-width: 760px) { .canvas { padding: 20px 14px; } .info { right: 16px; bottom: 16px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="back" href="/study/module?m={{ m.module | urlencode }}">← {{ m.module }}</a>
+<div class="head">
+    <h1>🧠 {{ data.title }}</h1>
+    <div class="tools"><button type="button" onclick="setAll(false)">Expand all</button><button type="button" onclick="setAll(true)">Collapse</button></div>
+</div>
+
+<div class="card canvas">
+    <ul class="mm">
+        <li>
+            <div class="node d0" data-title="{{ data.title }}" data-note=""><span class="label">{{ data.title }}</span></div>
+            <ul>{% for b in data.branches %}{{ node(b, colours[loop.index0 % colours|length], 1) }}{% endfor %}</ul>
+        </li>
+    </ul>
+</div>
+
+<div class="info" id="info">
+    <button type="button" class="x" onclick="document.getElementById('info').classList.remove('show')">✕</button>
+    <h3 id="info-title"></h3><p id="info-note"></p>
+    <a id="info-ask"><button type="button">💬 Ask Claude about this</button></a>
+</div>
+
+<form action="/study/map/{{ m.id }}/delete" method="post" onsubmit="return confirm('Delete this mind map?')" style="text-align:right">
+    <button class="del">Delete mind map</button>
+</form>
+
+<script>
+const MODULE = {{ m.module | tojson }};
+const MAP_TITLE = {{ data.title | tojson }};
+document.querySelectorAll(".tog").forEach(t => t.addEventListener("click", e => {
+    e.stopPropagation();
+    t.closest("li").classList.toggle("closed");
+}));
+document.querySelectorAll(".node").forEach(n => n.addEventListener("click", () => {
+    document.querySelectorAll(".node.sel").forEach(x => x.classList.remove("sel"));
+    n.classList.add("sel");
+    const li = n.closest("li");
+    if (li.classList.contains("closed")) li.classList.remove("closed");   // tapping a closed idea opens it
+    document.getElementById("info-title").textContent = n.dataset.title;
+    document.getElementById("info-note").textContent = n.dataset.note || "Tap below to go deeper on this.";
+    const q = `Explain "${n.dataset.title}" (from my ${MAP_TITLE} mind map): what it is, why it matters for my assignments and exam, and an example.`;
+    document.getElementById("info-ask").href = `/study/module?m=${encodeURIComponent(MODULE)}&q=${encodeURIComponent(q)}`;
+    document.getElementById("info").classList.add("show");
+}));
+function setAll(closed) {
+    document.querySelectorAll(".mm li").forEach(li => { if (li.querySelector(":scope > ul") && li.querySelector(":scope > .node:not(.d0)")) li.classList.toggle("closed", closed); });
+}
+</script>
+{% endblock %}

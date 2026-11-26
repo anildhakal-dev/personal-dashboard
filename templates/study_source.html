@@ -1,0 +1,67 @@
+{# The notes + gap check for one source, shown in the pop-up #}
+<div class="modal-kicker">{{ kinds.get(src.kind, '📄') }} · {{ src.filename }} · {{ pages|length }} page{{ '' if pages|length == 1 else 's' }}</div>
+<h2 class="modal-title">{{ src.title }}</h2>
+{% if g.summary %}<p class="guide-summary">{{ g.summary | mdi }}</p>{% endif %}
+
+<div class="guide-tabs">
+    <button type="button" class="gtab on" data-show="g-notes">{{ 'What it wants' if src.kind == 'brief' else 'Notes' }}</button>
+    {% if gaps %}<button type="button" class="gtab" data-show="g-gaps">Gaps ({{ gaps|rejectattr('done')|list|length }})</button>{% endif %}
+    <button type="button" class="gtab" data-show="g-text">Source text</button>
+</div>
+
+<div class="gpane" id="g-notes">
+{% if src.kind == 'brief' %}
+    <div class="brief-meta">
+        {% for label, v in [('Type', g.kind), ('Due', g.due), ('Weighting', g.weighting), ('Length', g.length)] if v %}
+        <span><b>{{ label }}</b> {{ v }}</span>
+        {% endfor %}
+    </div>
+    {% if g.task %}<h4>The task</h4><p>{{ g.task | mdi }}</p>{% endif %}
+    {% if g.requirements %}<h4>Must do</h4><ul>{% for r in g.requirements %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+    {% if g.first_class %}<h4>What a 1st looks like</h4><ul class="first">{% for r in g.first_class %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+    {% if g.topics_needed %}<h4>Knowledge needed</h4><ul>{% for r in g.topics_needed %}<li>{{ r | mdi }}</li>{% endfor %}</ul>{% endif %}
+{% else %}
+    {% if g.assignment_links %}
+    <h4>🎯 Where this helps your assignments</h4>
+    {% for a in g.assignment_links %}<div class="link-box"><b>{{ a.assignment }}</b><br>{{ a.how | mdi }}</div>{% endfor %}
+    {% endif %}
+    {% for s in g.sections or [] %}
+    <h4>{{ s.heading }}</h4>
+    <ul>{% for p in s.points %}<li>{{ p | mdi }}</li>{% endfor %}</ul>
+    {% endfor %}
+    {% if g.key_terms %}
+    <h4>🔑 Key terms</h4>
+    {% for t in g.key_terms %}<div class="term"><b>{{ t.term }}</b>: {{ t.meaning | mdi }}</div>{% endfor %}
+    {% endif %}
+    {% if g.formulas %}
+    <h4>∑ Formulas</h4>
+    {% for f in g.formulas %}<div class="term"><b>{{ f.name }}</b><div class="formula">{{ f.formula }}</div>{{ f.meaning | mdi }}</div>{% endfor %}
+    {% endif %}
+{% endif %}
+</div>
+
+{% if gaps %}
+<div class="gpane" id="g-gaps" hidden>
+    {% for gp in gaps %}
+    <div class="gap {{ 'done' if gp.done }}">
+        <button type="button" class="tick" onclick="toggleGap({{ gp.id }}, this)">{{ '✓' if gp.done }}</button>
+        <div><b>{{ gp.gap | mdi }}</b>
+            <div class="sub">Why: {{ gp.why | mdi }}</div>
+            <div class="sub"><b>Close it:</b> {{ gp.fix | mdi }}</div></div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="gpane" id="g-text" hidden>
+    {% for p in pages %}
+    <div class="page {{ 'hl' if page == loop.index }}" id="page-{{ loop.index }}">
+        <div class="page-no">Page {{ loop.index }}</div>
+        <div class="page-text">{{ p }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<form action="/study/source/{{ src.id }}/delete" method="post" onsubmit="return confirm('Delete this source, its notes and gaps?')" class="modal-foot">
+    <button class="ghost danger">Delete source</button>
+</form>

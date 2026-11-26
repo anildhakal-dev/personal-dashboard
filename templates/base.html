@@ -8,26 +8,30 @@
     <link rel="manifest" href="/static/manifest.json">
     <link rel="apple-touch-icon" href="/static/icon-192.png">
     <link rel="icon" href="/static/icon-192.png">
-    <meta name="theme-color" content="#0b0d17">
+    <meta name="theme-color" content="#faf8f3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Dashboard">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Colours used everywhere. Change these to re-theme the whole app */
+        /* Colours used everywhere. Change these to re-theme the whole app.
+           (The names purple/pink/cyan are old; they now hold the golds.) */
         :root {
-            --bg: #0b0d17;
-            --panel: rgba(255, 255, 255, 0.05);
-            --border: rgba(255, 255, 255, 0.09);
-            --text: #eef0ff;
-            --muted: #8b90b0;
-            --purple: #8b5cf6;
-            --pink: #ec4899;
-            --cyan: #22d3ee;
-            --green: #34d399;
-            --red: #f87171;
+            --bg: #faf8f3;
+            --panel: #ffffff;
+            --border: rgba(160, 125, 55, 0.18);
+            --text: #241f18;
+            --muted: #857a6a;
+            --purple: #d4a017;   /* main gold */
+            --pink: #b8860b;     /* deep gold */
+            --cyan: #f0c95a;     /* light gold */
+            --ink: #3b2a06;      /* dark text that sits on gold */
+            /* Shiny metallic gold, used on buttons and highlights */
+            --shine: linear-gradient(135deg, #f9e08b 0%, #e6b43c 32%, #c9951f 58%, #f3d16b 82%, #d9a52a 100%);
+            --green: #15885f;
+            --red: #c8463a;
         }
         * { box-sizing: border-box; }
         body {
@@ -39,22 +43,10 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
-        /* Soft coloured glows floating in the background */
-        body::before, body::after {
-            content: "";
-            position: fixed;
-            width: 520px; height: 520px;
-            border-radius: 50%;
-            filter: blur(120px);
-            opacity: 0.35;
-            z-index: -1;
-            animation: float 14s ease-in-out infinite alternate;
-        }
-        body::before { background: var(--purple); top: -160px; right: -120px; }
-        body::after  { background: var(--cyan); bottom: -200px; left: 120px; animation-delay: -7s; opacity: 0.2; }
-        @keyframes float {
-            from { transform: translate(0, 0) scale(1); }
-            to   { transform: translate(-60px, 40px) scale(1.15); }
+        /* A very soft warm glow in the top corner, nothing else */
+        body::before {
+            content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
+            background: radial-gradient(900px 500px at 100% 0%, rgba(217, 180, 106, 0.14), transparent 70%);
         }
 
         /* Sidebar */
@@ -62,8 +54,7 @@
             width: 240px;
             padding: 28px 18px;
             border-right: 1px solid var(--border);
-            background: rgba(11, 13, 23, 0.6);
-            backdrop-filter: blur(20px);
+            background: #ffffff;
             display: flex;
             flex-direction: column;
             /* stays in place while the page scrolls, so the quote is always visible */
@@ -79,9 +70,9 @@
         }
         .logo-mark {
             width: 34px; height: 34px; border-radius: 10px;
-            background: linear-gradient(135deg, var(--purple), var(--pink));
-            display: grid; place-items: center;
-            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+            background: var(--shine);
+            display: grid; place-items: center; color: var(--ink); font-size: 16px;
+            box-shadow: 0 6px 16px rgba(212,160,23,0.3);
         }
         .nav-label {
             font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
@@ -97,16 +88,21 @@
             font-weight: 500;
             transition: all 0.2s;
         }
-        .sidebar a:hover { background: var(--panel); color: var(--text); }
+        .sidebar a:hover { background: #faf5ea; color: var(--text); }
         .sidebar a.active {
-            background: linear-gradient(135deg, rgba(139,92,246,0.25), rgba(236,72,153,0.15));
-            color: var(--text);
-            border: 1px solid rgba(139, 92, 246, 0.35);
+            background: #fcf0cc;
+            color: var(--pink); font-weight: 700;
+            border: 1px solid rgba(212,160,23,0.3);
         }
         .sidebar .soon { opacity: 0.45; pointer-events: none; }
         .tag {
             margin-left: auto; font-size: 10px; padding: 2px 8px;
             border-radius: 20px; background: var(--panel); border: 1px solid var(--border);
+        }
+        .nav-count {
+            margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+            background: var(--red); color: white; font-size: 11px; font-weight: 800;
+            display: inline-grid; place-items: center;
         }
         .sidebar-foot { margin-top: 16px; font-size: 12px; color: var(--muted); padding: 0 12px; }
 
@@ -115,8 +111,8 @@
             margin-top: auto;
             padding: 18px 16px 14px;
             border-radius: 16px;
-            background: linear-gradient(160deg, rgba(139,92,246,0.22), rgba(34,211,238,0.08));
-            border: 1px solid rgba(139, 92, 246, 0.3);
+            background: linear-gradient(160deg, #fdf3d6, #fffdf8);
+            border: 1px solid rgba(212,160,23,0.3);
             position: relative;
             overflow: hidden;
         }
@@ -124,16 +120,16 @@
             content: "\201C";
             position: absolute; top: -18px; right: 10px;
             font-size: 90px; font-family: Georgia, serif;
-            color: rgba(255,255,255,0.08);
+            color: rgba(140,105,40,0.072);
         }
-        .quote-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #c4b5fd; margin-bottom: 8px; }
+        .quote-label { font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #a87b0f; margin-bottom: 8px; }
         #quote-text { font-size: 14px; line-height: 1.55; font-style: italic; margin: 0 0 10px; transition: opacity 0.5s; }
-        #quote-author { font-size: 12px; font-weight: 700; color: #c4b5fd; transition: opacity 0.5s; }
+        #quote-author { font-size: 12px; font-weight: 700; color: #a87b0f; transition: opacity 0.5s; }
         .quote-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
         .quote-actions a { padding: 0; margin: 0; font-size: 12px; display: inline; }
         .quote-actions a:hover { background: none; }
         .quote-next {
-            background: rgba(255,255,255,0.08); box-shadow: none;
+            background: rgba(140,105,40,0.072); box-shadow: none; color: var(--pink);
             padding: 5px 11px; font-size: 12px; border-radius: 8px;
         }
 
@@ -144,44 +140,44 @@
             border: 1px solid var(--border);
             border-radius: 20px;
             padding: 24px 26px;
-            backdrop-filter: blur(16px);
+            box-shadow: 0 1px 2px rgba(90, 66, 24, 0.04), 0 8px 24px rgba(90, 66, 24, 0.05);
             margin-bottom: 22px;
         }
         h1 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
         h2 { margin: 0 0 18px; font-size: 18px; }
         .gradient-text {
-            background: linear-gradient(90deg, var(--purple), var(--pink), var(--cyan));
+            background: linear-gradient(90deg, #b8860b, #e6b43c 45%, #c9951f 70%, #e8b833);
             -webkit-background-clip: text; background-clip: text; color: transparent;
         }
         .muted { color: var(--muted); }
         button {
             font-family: inherit;
-            background: linear-gradient(135deg, var(--purple), var(--pink));
-            color: white;
+            background: var(--shine);
+            color: var(--ink);
             border: none;
             padding: 12px 22px;
             border-radius: 12px;
             cursor: pointer;
             font-size: 14px; font-weight: 600;
-            box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
+            box-shadow: 0 8px 22px rgba(212,160,23,0.32), inset 0 1px 0 rgba(255,255,255,0.55);
             transition: transform 0.15s, box-shadow 0.15s;
         }
-        button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(236, 72, 153, 0.4); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(212,160,23,0.45), inset 0 1px 0 rgba(255,255,255,0.55); filter: brightness(1.05); }
 
         /* Form boxes used on every page */
         .field {
             font-family: inherit; font-size: 14px;
             padding: 11px 14px;
-            background: rgba(255,255,255,0.04);
+            background: #fffdf8;
             border: 1px solid var(--border);
             border-radius: 12px;
             color: var(--text);
             outline: none;
-            color-scheme: dark;
+            color-scheme: light;
         }
-        .field:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.2); }
+        .field:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(212,160,23,0.2); }
         .field::placeholder { color: var(--muted); }
-        select.field option { background: #151827; }
+        select.field option { background: #ffffff; }
 
         /* Phones: logo on top, menu becomes a row of swipeable pills,
            and the quote moves to the bottom of the page */
@@ -209,7 +205,7 @@
 </head>
 <body>
     <nav class="sidebar">
-        <div class="logo"><span class="logo-mark">⚡</span> My Dashboard</div>
+        <div class="logo"><span class="logo-mark">✦</span> My Dashboard</div>
         <div class="nav-label">Menu</div>
         <div class="nav">
         <a class="{{ 'active' if request.path == '/' }}" href="/">🏠 Home</a>
@@ -221,7 +217,7 @@
         <a class="{{ 'active' if request.path == '/money' }}" href="/money">💷 Money</a>
         <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
         <a class="{{ 'active' if request.path == '/calendar' }}" href="/calendar">📅 Calendar</a>
-        <a class="soon" href="#">🔔 Alerts <span class="tag">soon</span></a>
+        <a class="{{ 'active' if request.path.startswith('/alerts') }}" href="/alerts">🔔 Alerts {% if alert_count %}<span class="nav-count">{{ alert_count }}</span>{% endif %}</a>
         <a href="/logout">🚪 Log out</a>
         </div>
 

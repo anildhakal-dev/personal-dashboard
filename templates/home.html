@@ -18,19 +18,19 @@
     }
     .stat .num { font-size: 30px; font-weight: 800; line-height: 1; }
     .stat .label { color: var(--muted); font-size: 13px; margin-top: 4px; }
-    .i-purple { background: rgba(139, 92, 246, 0.18); }
+    .i-purple { background: rgba(212,160,23,0.18); }
     .i-green  { background: rgba(52, 211, 153, 0.18); }
 
     /* Progress ring: conic-gradient fills the circle up to the percent */
     .ring {
         width: 54px; height: 54px; border-radius: 50%;
-        background: conic-gradient(var(--cyan) calc({{ percent }} * 1%), rgba(255,255,255,0.08) 0);
+        background: conic-gradient(var(--cyan) calc({{ percent }} * 1%), rgba(140,105,40,0.072) 0);
         display: grid; place-items: center;
     }
     .ring::after {
         content: "{{ percent }}%";
         width: 42px; height: 42px; border-radius: 50%;
-        background: #151827;
+        background: #ffffff;
         display: grid; place-items: center;
         font-size: 12px; font-weight: 700;
     }
@@ -41,7 +41,7 @@
         flex: 1;
         font-family: inherit; font-size: 15px;
         padding: 13px 16px;
-        background: rgba(255,255,255,0.04);
+        background: rgba(140,105,40,0.036);
         border: 1px solid var(--border);
         border-radius: 12px;
         color: var(--text);
@@ -49,21 +49,21 @@
         transition: border 0.2s, box-shadow 0.2s;
     }
     .add-row input::placeholder { color: var(--muted); }
-    .add-row input[type="date"] { flex: 0 0 170px; color-scheme: dark; }
-    .add-row input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.2); }
+    .add-row input[type="date"] { flex: 0 0 170px; color-scheme: light; }
+    .add-row input:focus { border-color: var(--purple); box-shadow: 0 0 0 4px rgba(212,160,23,0.2); }
 
     /* Each task row */
     .task {
         display: flex; align-items: center; gap: 14px;
         padding: 14px 16px;
         border-radius: 14px;
-        background: rgba(255,255,255,0.03);
+        background: rgba(140,105,40,0.027);
         border: 1px solid transparent;
         margin-bottom: 8px;
         transition: all 0.2s;
         animation: slideIn 0.35s ease both;
     }
-    .task:hover { border-color: var(--border); background: rgba(255,255,255,0.06); transform: translateX(4px); }
+    .task:hover { border-color: var(--border); background: rgba(140,105,40,0.054); transform: translateX(4px); }
     @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
     .task .title { flex: 1; font-weight: 500; }
     .task form { margin: 0; }
@@ -78,11 +78,11 @@
         box-shadow: none;
         font-size: 14px;
     }
-    .tick:hover { transform: scale(1.1); box-shadow: 0 0 12px rgba(139,92,246,0.6); }
+    .tick:hover { transform: scale(1.1); box-shadow: 0 0 12px rgba(212,160,23,0.6); }
     .task.done .tick { background: linear-gradient(135deg, var(--green), var(--cyan)); border-color: transparent; }
 
     .delete {
-        background: transparent; box-shadow: none;
+        background: transparent; box-shadow: none; color: var(--text);
         color: var(--muted); padding: 6px 10px; opacity: 0;
     }
     .task:hover .delete { opacity: 1; }
@@ -94,10 +94,10 @@
         padding: 5px 11px; border-radius: 20px;
         white-space: nowrap;
     }
-    .badge.red    { background: rgba(248,113,113,0.15); color: #fca5a5; box-shadow: 0 0 14px rgba(248,113,113,0.25); }
-    .badge.orange { background: rgba(251,146,60,0.15);  color: #fdba74; }
-    .badge.blue   { background: rgba(34,211,238,0.12);  color: #67e8f9; }
-    .badge.grey   { background: rgba(255,255,255,0.06); color: var(--muted); }
+    .badge.red    { background: rgba(248,113,113,0.15); color: #c0392b; box-shadow: 0 0 14px rgba(248,113,113,0.25); }
+    .badge.orange { background: rgba(251,146,60,0.15);  color: #c2620a; }
+    .badge.blue   { background: rgba(230,192,104,0.12);  color: #b8860b; }
+    .badge.grey   { background: rgba(140,105,40,0.054); color: var(--muted); }
     .task.done .badge { display: none; }
     .i-red { background: rgba(248,113,113,0.18); }
 
@@ -123,7 +123,7 @@
 <div class="top">
     <div>
         <p class="muted" style="margin:0 0 6px">{{ greeting }},</p>
-        <h1>Anil <span class="gradient-text">👋 let's get things done</span></h1>
+        <h1>Anil, <span class="gradient-text" id="kick">you've got work to do.</span></h1>
     </div>
     <div class="date-pill">📆 {{ today }}</div>
 </div>
@@ -178,4 +178,29 @@
     </div>
     {% endfor %}
 </div>
+<script>
+// A different kick up the arse every time the page loads. Add your own lines to the list.
+const KICKS = [
+    "you've got work to do.",
+    "stop messing around and get your head down.",
+    "nobody's coming to do it for you.",
+    "phone down. Work. Now.",
+    "a 1st doesn't earn itself, get on with it.",
+    "stop scrolling, you lazy sod.",
+    "you said you'd do it. So do it.",
+    "you've wasted enough time today. Move.",
+    "excuses don't pay the bills.",
+    "get off your arse and get it done.",
+    "you're better than this. Prove it.",
+    "quit faffing about.",
+    "tired? Tough. Crack on.",
+    "your future self is watching. Don't disappoint.",
+    "discipline over motivation. Move.",
+    "what the hell are you waiting for?",
+    "no one cares how you feel. Do the work.",
+    "stop being soft and get it done.",
+    "the work won't do itself, mate.",
+];
+document.getElementById("kick").textContent = KICKS[Math.floor(Math.random() * KICKS.length)];
+</script>
 {% endblock %}

@@ -28,7 +28,7 @@
         background: conic-gradient(var(--green) calc({{ win_rate }} * 1%), rgba(248,113,113,0.35) 0);
         display: grid; place-items: center;
     }
-    .ring .inner { width: 72px; height: 72px; border-radius: 50%; background: #151827; display: grid; place-items: center; text-align: center; }
+    .ring .inner { width: 72px; height: 72px; border-radius: 50%; background: #ffffff; display: grid; place-items: center; text-align: center; }
     .ring b { font-size: 20px; display: block; line-height: 1; }
     .ring span { font-size: 10px; color: var(--muted); }
     .mini .item { min-width: 110px; }
@@ -42,13 +42,13 @@
     .cal-head h2 { margin: 0; }
     .cal-head a {
         color: var(--text); text-decoration: none; padding: 6px 12px; border-radius: 10px;
-        background: rgba(255,255,255,0.06); border: 1px solid var(--border); font-weight: 700;
+        background: rgba(140,105,40,0.054); border: 1px solid var(--border); font-weight: 700;
     }
     .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 1.2fr); gap: 6px; }
     .cal .dow { font-size: 11px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 4px; }
     .cell {
         min-height: 62px; border-radius: 12px; padding: 7px 8px;
-        background: rgba(255,255,255,0.03); border: 1px solid transparent;
+        background: rgba(140,105,40,0.027); border: 1px solid transparent;
         display: flex; flex-direction: column; justify-content: space-between;
     }
     .cell .n { font-size: 11px; color: var(--muted); }
@@ -60,8 +60,8 @@
     .cell.today { border-color: var(--cyan); }
     .cell.win { background: rgba(52,211,153,0.16); border-color: rgba(52,211,153,0.3); }
     .cell.loss { background: rgba(248,113,113,0.16); border-color: rgba(248,113,113,0.3); }
-    .cell.week { background: linear-gradient(160deg, rgba(139,92,246,0.22), rgba(236,72,153,0.08)); border-color: rgba(139,92,246,0.3); }
-    .cell.week .n { color: #c4b5fd; }
+    .cell.week { background: linear-gradient(160deg, rgba(212,160,23,0.22), rgba(184,134,11,0.08)); border-color: rgba(212,160,23,0.3); }
+    .cell.week .n { color: #a87b0f; }
 
     /* Log a trade form */
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -73,10 +73,10 @@
     .dir input { display: none; }
     .dir span {
         display: block; text-align: center; padding: 10px; border-radius: 12px; cursor: pointer;
-        background: rgba(255,255,255,0.04); border: 1px solid var(--border); font-weight: 700; color: var(--muted);
+        background: rgba(140,105,40,0.036); border: 1px solid var(--border); font-weight: 700; color: var(--muted);
     }
-    .dir input:checked + span.long { background: rgba(52,211,153,0.18); border-color: var(--green); color: #6ee7b7; }
-    .dir input:checked + span.short { background: rgba(248,113,113,0.18); border-color: var(--red); color: #fca5a5; }
+    .dir input:checked + span.long { background: rgba(52,211,153,0.18); border-color: var(--green); color: #0f8a5f; }
+    .dir input:checked + span.short { background: rgba(248,113,113,0.18); border-color: var(--red); color: #c0392b; }
     .check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text) !important; }
     .check input { width: 18px; height: 18px; accent-color: var(--purple); }
     .form-grid button { width: 100%; }
@@ -89,11 +89,11 @@
     .bar .top { align-items: flex-end; }
     .bar .bottom { align-items: flex-start; }
     .bar .fill { width: 100%; border-radius: 6px; min-height: 3px; transition: height 0.8s; }
-    .bar .fill.g { background: linear-gradient(180deg, #6ee7b7, var(--green)); box-shadow: 0 0 14px rgba(52,211,153,0.4); }
-    .bar .fill.r { background: linear-gradient(0deg, #fca5a5, var(--red)); box-shadow: 0 0 14px rgba(248,113,113,0.4); }
+    .bar .fill.g { background: linear-gradient(180deg, #0f8a5f, var(--green)); box-shadow: 0 0 14px rgba(52,211,153,0.4); }
+    .bar .fill.r { background: linear-gradient(0deg, #c0392b, var(--red)); box-shadow: 0 0 14px rgba(248,113,113,0.4); }
     .bar .tip {
         position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-        background: #151827; border: 1px solid var(--border); padding: 4px 8px; border-radius: 8px;
+        background: #ffffff; border: 1px solid var(--border); padding: 4px 8px; border-radius: 8px;
         font-size: 11px; font-weight: 700; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 2;
     }
     .bar:hover .tip { opacity: 1; }
@@ -103,14 +103,14 @@
     /* Trades list */
     .trade {
         display: grid; grid-template-columns: 80px 1fr auto auto; gap: 14px; align-items: center;
-        padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.03); margin-bottom: 8px;
+        padding: 12px 14px; border-radius: 14px; background: rgba(140,105,40,0.027); margin-bottom: 8px;
     }
     .trade .when { font-size: 12px; color: var(--muted); }
     .trade .sym { font-weight: 800; }
     .pill { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
-    .pill.Long { background: rgba(52,211,153,0.15); color: #6ee7b7; }
-    .pill.Short { background: rgba(248,113,113,0.15); color: #fca5a5; }
-    .pill.broke { background: rgba(251,146,60,0.15); color: #fdba74; }
+    .pill.Long { background: rgba(52,211,153,0.15); color: #0f8a5f; }
+    .pill.Short { background: rgba(248,113,113,0.15); color: #c0392b; }
+    .pill.broke { background: rgba(251,146,60,0.15); color: #c2620a; }
     .trade .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
     .trade .pnl { font-weight: 800; font-size: 16px; text-align: right; }
     .x { margin: 0; }
@@ -167,7 +167,7 @@
         <div class="item"><div class="label">Trades</div><div class="value">{{ trade_count }}</div></div>
         <div class="item"><div class="label">Avg win</div><div class="value up">{{ money(avg_win) }}</div></div>
         <div class="item"><div class="label">Avg loss</div><div class="value down">{{ money(avg_loss) }}</div></div>
-        <div class="item"><div class="label">Followed plan</div><div class="value" style="color:#c4b5fd">{{ plan_rate }}%</div></div>
+        <div class="item"><div class="label">Followed plan</div><div class="value" style="color:#a87b0f">{{ plan_rate }}%</div></div>
     </div>
 </div>
 

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 980px; }
+    .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
+    .head p { margin: 8px 0 0; }
+    .tally { display: flex; gap: 8px; }
+    .pill { font-size: 13px; font-weight: 800; padding: 7px 13px; border-radius: 20px; }
+    .pill.red { background: rgba(200,70,58,0.12); color: var(--red); }
+    .pill.amber { background: rgba(217,119,6,0.12); color: #b45309; }
+    .pill.gold { background: rgba(212,160,23,0.14); color: var(--pink); }
+
+    .group h2 { font-size: 15px; margin: 0 0 10px; }
+    .group { margin-bottom: 22px; }
+    .alert { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; margin-bottom: 8px;
+             background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--l);
+             text-decoration: none; color: var(--text); transition: transform 0.15s, box-shadow 0.15s; }
+    .alert:hover { transform: translateX(3px); box-shadow: 0 8px 22px rgba(90,66,24,0.08); }
+    .alert.red { --l: var(--red); } .alert.amber { --l: #e8930c; } .alert.gold { --l: var(--purple); }
+    .alert .e { font-size: 22px; width: 32px; text-align: center; flex-shrink: 0; }
+    .alert .t { font-weight: 700; font-size: 15px; }
+    .alert .b { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+    .alert .go { margin-left: auto; color: var(--muted); font-size: 18px; }
+    .clear { text-align: center; padding: 40px 20px; }
+    .clear .big { font-size: 40px; }
+
+    .setup h2 { margin-bottom: 6px; }
+    .step { display: flex; gap: 14px; padding: 14px 0; border-top: 1px solid var(--border); align-items: flex-start; }
+    .step:first-of-type { border-top: none; }
+    .num { width: 28px; height: 28px; border-radius: 50%; background: var(--shine); color: var(--ink); font-weight: 800; font-size: 13px;
+           display: grid; place-items: center; flex-shrink: 0; }
+    .step .body { flex: 1; min-width: 0; }
+    .step .body b { display: block; margin-bottom: 4px; }
+    .step .body p { margin: 0 0 10px; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .alt { background: rgba(140,105,40,0.07); box-shadow: none; color: var(--text); }
+    .status { font-size: 13px; font-weight: 600; }
+    .status.ok { color: var(--green); } .status.bad { color: var(--red); }
+    .url { display: flex; gap: 8px; }
+    .url input { flex: 1; min-width: 0; font-size: 12.5px; }
+    .devices { margin: 8px 0 0; padding: 0; list-style: none; font-size: 13px; }
+    .devices li { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: var(--muted); }
+    .devices form { margin-left: auto; }
+    .x { background: transparent; box-shadow: none; color: var(--muted); padding: 2px 8px; font-size: 12px; }
+    .x:hover { color: var(--red); transform: none; box-shadow: none; }
+    .times { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; align-items: end; }
+    .times label { font-size: 12px; color: var(--muted); display: grid; gap: 5px; }
+    .log { font-size: 12.5px; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.7; }
+    @media (max-width: 760px) {
+        .times { grid-template-columns: 1fr 1fr; }
+        .alert { padding: 12px 13px; gap: 11px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="head">
+    <div>
+        <h1>🔔 <span class="gradient-text">Alerts</span></h1>
+        <p class="muted">{{ headline }}</p>
+    </div>
+    <div class="tally">
+        {% for title, list in groups %}{% if list %}<span class="pill {{ ['red', 'amber', 'gold'][loop.index0] }}">{{ list|length }} {{ ['urgent', 'today', 'coming up'][loop.index0] }}</span>{% endif %}{% endfor %}
+    </div>
+</div>
+
+{% if total %}
+    {% for title, list in groups %}{% if list %}
+    <div class="group">
+        <h2>{{ title }}</h2>
+        {% for a in list %}
+        <a class="alert {{ a.level }}" href="{{ a.url }}">
+            <span class="e">{{ a.emoji }}</span>
+            <div><div class="t">{{ a.title }}</div><div class="b">{{ a.body }}</div></div>
+            <span class="go">›</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}{% endfor %}
+{% else %}
+<div class="card clear"><div class="big">🫡</div><p><b>Nothing urgent.</b><br><span class="muted">Don't get comfy. Get ahead on something.</span></p></div>
+{% endif %}
+
+<div class="card setup" id="setup">
+    <h2>📲 Notifications on your phone</h2>
+    <p class="muted" style="margin:0 0 6px;font-size:13.5px">A morning round-up, an evening check, and a nudge before each class or calendar event.</p>
+
+    <div class="step">
+        <span class="num">1</span>
+        <div class="body">
+            <b>Turn them on for this device</b>
+            <p>On iPhone, open the dashboard from its <b style="display:inline">home screen icon</b> first (not Safari), then tap the button. Do the same on any other phone or laptop you want them on.</p>
+            <div class="row">
+                <button type="button" id="enable">🔔 Turn on notifications</button>
+                <button type="button" class="alt" id="test">Send a test</button>
+                <span class="status" id="status"></span>
+            </div>
+            {% if info.devices %}
+            <ul class="devices">
+                {% for d in info.devices %}
+                <li>✓ {{ d.device or 'Device' }} <span>· since {{ d.created[:10] }}</span>
+                    <form action="/alerts/device/{{ d.id }}/delete" method="post"><button class="x">Remove</button></form></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="step">
+        <span class="num">2</span>
+        <div class="body">
+            <b>Set the timer (once)</b>
+            <p>On cron-job.org, make a job that opens this link <b style="display:inline">every 15 minutes</b>. Keep the link private.
+               {% if info.last_run %}Last run: <b style="display:inline">{{ info.last_run }}</b>.{% else %}<span style="color:var(--red)">Not run yet.</span>{% endif %}</p>
+            <div class="url"><input class="field" id="cron" value="{{ info.cron_url }}" readonly><button type="button" class="alt" id="copy">Copy</button></div>
+        </div>
+    </div>
+
+    <div class="step">
+        <span class="num">3</span>
+        <div class="body">
+            <b>When to hassle you</b>
+            <form class="times" action="/alerts/settings" method="post">
+                <label>Morning round-up<input class="field" type="time" name="morning" value="{{ info.morning }}"></label>
+                <label>Evening check<input class="field" type="time" name="evening" value="{{ info.evening }}"></label>
+                <label>Mins before a class<input class="field" type="number" name="before_class" min="0" max="240" value="{{ info.before_class }}"></label>
+                <button>{{ 'Saved ✓' if saved else 'Save' }}</button>
+            </form>
+        </div>
+    </div>
+
+    {% if info.sent %}
+    <div class="step">
+        <span class="num">✓</span>
+        <div class="body">
+            <b>Recently sent</b>
+            <ul class="log">{% for s in info.sent %}<li>{{ s.sent_at[5:] }} · {{ s.title }}</li>{% endfor %}</ul>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const KEY = {{ info.public_key | tojson }};
+const status = document.getElementById("status");
+const say = (t, ok) => { status.textContent = t; status.className = "status " + (ok ? "ok" : "bad"); };
+
+function keyBytes(b64) {
+    const pad = "=".repeat((4 - b64.length % 4) % 4);
+    const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+function deviceName() {
+    const u = navigator.userAgent;
+    if (/iPhone/.test(u)) return "iPhone";
+    if (/iPad/.test(u)) return "iPad";
+    if (/Android/.test(u)) return "Android phone";
+    if (/Mac/.test(u)) return "Mac";
+    if (/Windows/.test(u)) return "Windows PC";
+    return "Device";
+}
+
+document.getElementById("enable").onclick = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        const ios = /iPhone|iPad/.test(navigator.userAgent);
+        return say(ios ? "Open the dashboard from your home screen icon, then try again." : "This browser can't do notifications.", false);
+    }
+    try {
+        say("Asking…", true);
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") return say("Blocked. Allow notifications for the dashboard in Settings.", false);
+        const reg = await navigator.serviceWorker.register("/static/sw.js");
+        await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(KEY) });
+        const body = Object.assign(sub.toJSON(), { device: deviceName() });
+        const r = await fetch("/alerts/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error("Server said " + r.status);
+        say("On ✓ Reloading…", true);
+        setTimeout(() => location.reload(), 900);
+    } catch (e) { say("Didn't work: " + e.message, false); }
+};
+
+document.getElementById("test").onclick = async () => {
+    say("Sending…", true);
+    try {
+        const r = await (await fetch("/alerts/test", { method: "POST" })).json();
+        if (r.errors.length) say(`Reached ${r.ok}. Problem: ${r.errors[0]}`, false);
+        else if (!r.ok) say("No devices yet. Turn notifications on first.", false);
+        else say(`Sent to ${r.ok} device${r.ok > 1 ? "s" : ""} ✓`, true);
+    } catch (e) { say("Didn't work: " + e.message, false); }
+};
+
+document.getElementById("copy").onclick = () => {
+    const box = document.getElementById("cron");
+    box.select();
+    navigator.clipboard ? navigator.clipboard.writeText(box.value) : document.execCommand("copy");
+    document.getElementById("copy").textContent = "Copied ✓";
+};
+</script>
+{% endblock %}

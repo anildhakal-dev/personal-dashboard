@@ -18,7 +18,7 @@ DB = "dashboard.db"
 # Runs before every page: if you're not logged in, you go to the login page
 @app.before_request
 def require_login():
-    if request.path in ("/login",) or request.path.startswith("/static/"):
+    if request.path in ("/login", "/alerts/run") or request.path.startswith("/static/"):
         return None
     if not session.get("logged_in"):
         return redirect("/login")
@@ -473,7 +473,7 @@ def delete_quote(quote_id):
 
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 # Each module gets its own colour on the timetable
-COLOURS = ["#8b5cf6", "#ec4899", "#22d3ee", "#34d399", "#fb923c", "#facc15", "#60a5fa", "#f87171"]
+COLOURS = ["#c9951f", "#2f7d74", "#7a5c99", "#b5583a", "#3d6a99", "#6b7a2f", "#a8526a", "#5c6b73"]
 
 
 # Turns a due date into "Today", "in 5 days" etc, plus how urgent it is
@@ -1308,6 +1308,10 @@ app.register_blueprint(planner.bp)
 # ---------- Study (study.py) ----------
 import study
 app.register_blueprint(study.bp)
+
+# ---------- Alerts (alerts.py) ----------
+import alerts
+app.register_blueprint(alerts.bp)
 
 
 setup_database()
