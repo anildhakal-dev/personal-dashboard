@@ -471,6 +471,8 @@ def add_source():
         for g in gaps:
             conn.execute("INSERT INTO study_src_gaps (module, source_id, gap, why, fix) VALUES (?, ?, ?, ?, ?)",
                          (module, cur.lastrowid, g["gap"], g["why"], g["fix"]))
+        if kind == "brief":
+            build_checks(conn, cur.lastrowid, guide)
         conn.commit()
         return jsonify(ok=True, id=cur.lastrowid, title=guide["title"])
     except Exception as e:   # tell the page what went wrong instead of crashing
@@ -527,11 +529,12 @@ def notebook():
     gaps = conn.execute("SELECT * FROM study_src_gaps WHERE module = ? AND done = 0 ORDER BY id", (name,)).fetchall()
     deadlines = module_deadlines(conn, name)
     due = deck_deadline(conn, name)
+    checklists = checklist_summaries(conn, name)
     conn.close()
     return render_template("study_module.html", name=name, colour=colour, kinds=KINDS,
                            next=f"{kind} {nice_when(when)}" if when else "",
                            sources=sources, chat=chat, pins=pins, decks=decks, quizzes=quizzes,
-                           maps=maps, gaps=gaps, deadlines=deadlines, next_due=nice_when(due),
+                           maps=maps, gaps=gaps, deadlines=deadlines, next_due=nice_when(due), checklists=checklists,
                            prefill=request.args.get("q", ""), error=request.args.get("error"))
 
 
@@ -575,6 +578,8 @@ def delete_source(source_id):
     row = conn.execute("SELECT module FROM study_sources WHERE id = ?", (source_id,)).fetchone()
     conn.execute("DELETE FROM study_sources WHERE id = ?", (source_id,))
     conn.execute("DELETE FROM study_src_gaps WHERE source_id = ?", (source_id,))
+    conn.execute("DELETE FROM study_checks WHERE brief_id = ?", (source_id,))
+    conn.execute("DELETE FROM study_check_runs WHERE brief_id = ?", (source_id,))
     conn.commit()
     conn.close()
     return redirect("/study/module?m=" + quote(row["module"]) if row else "/study")
@@ -986,3 +991,162 @@ def delete_map(map_id):
 
 
 setup_study()
+
+# ---------- 1st-class checklist ----------
+# Every brief becomes a checklist: the must-dos, and what the marking criteria say a 1st looks like.
+# "Check against my notes" asks Claude which items your sources already cover (green),
+# partly cover (amber) or don't cover yet (red), with the next step for each.
+
+def setup_checks():
+    conn = get_db()
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS study_checks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brief_id INTEGER NOT NULL,
+            module TEXT NOT NULL,
+            kind TEXT NOT NULL,            -- 'must' (from the brief) or 'first' (what earns a 1st)
+            item TEXT NOT NULL,
+            status TEXT DEFAULT 'red',     -- red / amber / green (Claude's view)
+            evidence TEXT,                 -- where your notes cover it
+            next TEXT,                     -- the next thing to do
+            mine INTEGER DEFAULT 0         -- 1 = you ticked it off yourself
+        );
+        CREATE TABLE IF NOT EXISTS study_check_runs (
+            brief_id INTEGER PRIMARY KEY,
+            verdict TEXT,
+            checked_at TEXT,
+            sources INTEGER                -- how many sources it was checked against
+        );
+    """)
+    conn.close()
+
+
+def build_checks(conn, brief_id, guide):
+    """Turns a brief's requirements + 1st-class criteria into checklist items (once)."""
+    if conn.execute("SELECT 1 FROM study_checks WHERE brief_id = ?", (brief_id,)).fetchone():
+        return
+    module = conn.execute("SELECT module FROM study_sources WHERE id = ?", (brief_id,)).fetchone()["module"]
+    for kind, key in (("must", "requirements"), ("first", "first_class")):
+        for item in guide.get(key, []):
+            conn.execute("INSERT INTO study_checks (brief_id, module, kind, item) VALUES (?, ?, ?, ?)",
+                         (brief_id, module, kind, item))
+
+
+def check_light(c):
+    return "green" if c["mine"] else c["status"]
+
+
+def checklist_summaries(conn, module):
+    """One line per brief for the Studio panel: how much is covered."""
+    out = []
+    for b in conn.execute("SELECT id, title, guide FROM study_sources WHERE module = ? AND kind = 'brief' ORDER BY id", (module,)).fetchall():
+        build_checks(conn, b["id"], json.loads(b["guide"] or "{}"))   # briefs added before this feature
+        conn.commit()
+        items = conn.execute("SELECT * FROM study_checks WHERE brief_id = ?", (b["id"],)).fetchall()
+        lights = [check_light(c) for c in items]
+        run = conn.execute("SELECT * FROM study_check_runs WHERE brief_id = ?", (b["id"],)).fetchone()
+        out.append({"id": b["id"], "title": b["title"], "total": len(items),
+                    "green": lights.count("green"), "amber": lights.count("amber"), "red": lights.count("red"),
+                    "checked": bool(run)})
+    return out
+
+
+CHECK_SCHEMA = _obj({
+    "items": {"type": "array", "items": _obj({
+        "id": {"type": "integer"},
+        "status": {"type": "string", "enum": ["green", "amber", "red"]},
+        "evidence": {"type": "string", "description": "which source/notes cover it and how well, short; empty if none"},
+        "next": {"type": "string", "description": "the single next action to make it green; empty if green"},
+    })},
+    "verdict": {"type": "string", "description": "2 sentences max: are they on track for a 1st, and the biggest risk"},
+})
+
+CHECK_ASK = """Here is the checklist for my assignment "{title}" (from the brief and marking criteria),
+then everything I've covered so far (my notes from each source, my saved notes, and gaps I've closed).
+
+For EVERY checklist item (use its id), judge whether my material already gives me what I need to do it at 1st-class level:
+- green: covered properly, I could do this now
+- amber: partly covered (e.g. the idea is there but not the method, or the method but not how to write it up)
+- red: not covered yet
+evidence: name the source(s) that cover it. next: one concrete action, the fastest route to green.
+Be strict: a 1st needs depth, not a passing mention. Items I ticked myself are marked (ticked by me): still judge them honestly.
+
+CHECKLIST
+{items}
+
+MY MATERIAL
+{material}"""
+
+
+@bp.route("/study/checklist/<int:brief_id>")
+def checklist_page(brief_id):
+    conn = get_db()
+    brief = conn.execute("SELECT * FROM study_sources WHERE id = ? AND kind = 'brief'", (brief_id,)).fetchone()
+    if not brief:
+        conn.close()
+        return "Not found", 404
+    g = json.loads(brief["guide"] or "{}")
+    build_checks(conn, brief_id, g)
+    conn.commit()
+    items = [dict(c, light=check_light(c)) for c in
+             conn.execute("SELECT * FROM study_checks WHERE brief_id = ? ORDER BY kind DESC, id", (brief_id,))]
+    run = conn.execute("SELECT * FROM study_check_runs WHERE brief_id = ?", (brief_id,)).fetchone()
+    n_sources = conn.execute("SELECT COUNT(*) FROM study_sources WHERE module = ? AND kind != 'brief'", (brief["module"],)).fetchone()[0]
+    deadline = next((d for d in module_deadlines(conn, brief["module"])), None)
+    conn.close()
+    lights = [i["light"] for i in items]
+    return render_template("study_checklist.html", brief=brief, g=g, items=items, run=run,
+                           stale=bool(run) and n_sources != run["sources"], n_sources=n_sources,
+                           green=lights.count("green"), amber=lights.count("amber"), red=lights.count("red"),
+                           deadline=deadline, error=request.args.get("error"))
+
+
+@bp.route("/study/checklist/<int:brief_id>/check", methods=["POST"])
+def run_check(brief_id):
+    conn = get_db()
+    brief = conn.execute("SELECT * FROM study_sources WHERE id = ?", (brief_id,)).fetchone()
+    module = brief["module"]
+    try:
+        items = conn.execute("SELECT * FROM study_checks WHERE brief_id = ? ORDER BY id", (brief_id,)).fetchall()
+        listing = "\n".join(f"[{c['id']}] ({'must do' if c['kind'] == 'must' else 'for a 1st'}) {c['item']}"
+                            f"{' (ticked by me)' if c['mine'] else ''}" for c in items)
+        material = []
+        for s in conn.execute("SELECT title, kind, guide FROM study_sources WHERE module = ? AND kind != 'brief' ORDER BY id", (module,)):
+            material.append(f"--- {s['kind'].upper()}: {s['title']}\n{s['guide']}")
+        for p in conn.execute("SELECT title, content FROM study_pins WHERE module = ?", (module,)):
+            material.append(f"--- SAVED NOTE: {p['title']}\n{p['content'][:3000]}")
+        closed = [r["gap"] for r in conn.execute("SELECT gap FROM study_src_gaps WHERE module = ? AND done = 1", (module,))]
+        if closed:
+            material.append("--- GAPS I'VE CLOSED: " + "; ".join(closed))
+        if not material:
+            material = ["(nothing yet: no lectures, seminars or readings added)"]
+        content = [{"type": "text", "text": "ABOUT THIS MODULE\n" + module_context(conn, module)},
+                   {"type": "text", "text": CHECK_ASK.format(title=brief["title"], items=listing, material="\n\n".join(material))}]
+        result = ask_json(module, content, CHECK_SCHEMA)
+        valid = {c["id"] for c in items}
+        for r in result["items"]:
+            if r["id"] in valid:
+                conn.execute("UPDATE study_checks SET status = ?, evidence = ?, next = ? WHERE id = ?",
+                             (r["status"], r["evidence"], r["next"], r["id"]))
+        n_sources = conn.execute("SELECT COUNT(*) FROM study_sources WHERE module = ? AND kind != 'brief'", (module,)).fetchone()[0]
+        conn.execute("INSERT OR REPLACE INTO study_check_runs (brief_id, verdict, checked_at, sources) VALUES (?, ?, ?, ?)",
+                     (brief_id, result["verdict"], datetime.now().strftime("%d %b %H:%M"), n_sources))
+        conn.commit()
+        return redirect(f"/study/checklist/{brief_id}")
+    except Exception as e:
+        return redirect(f"/study/checklist/{brief_id}?error=" + quote(f"{type(e).__name__}: {e}"[:300]))
+    finally:
+        conn.close()
+
+
+@bp.route("/study/check/<int:check_id>/tick", methods=["POST"])
+def tick_check(check_id):
+    conn = get_db()
+    conn.execute("UPDATE study_checks SET mine = 1 - mine WHERE id = ?", (check_id,))
+    row = conn.execute("SELECT brief_id FROM study_checks WHERE id = ?", (check_id,)).fetchone()
+    conn.commit()
+    conn.close()
+    return redirect(f"/study/checklist/{row['brief_id']}#c{check_id}")
+
+
+setup_checks()

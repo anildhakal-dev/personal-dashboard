@@ -54,7 +54,7 @@ def setup_alerts():
             sent_at TEXT
         );
     """)
-    defaults = {"morning": "08:00", "evening": "20:30", "before_class": "60",
+    defaults = {"morning": "08:00", "evening": "20:30", "before_class": "60", "scorecard": "20:00",
                 "cron_key": secrets.token_urlsafe(18)}
     for k, v in defaults.items():
         conn.execute("INSERT OR IGNORE INTO alert_settings (key, value) VALUES (?, ?)", (k, v))
@@ -151,6 +151,24 @@ def collect(conn, now=None):
                 add("red", "🃏", f"{k['title']} flashcards", f"{k['module']}. Due {when}, {k['pass_mark']}% to pass.", f"/study/deck/{k['id']}", f"deck{k['id']}")
             elif hours <= 48:
                 add("amber", "🃏", f"{k['title']} flashcards", f"{k['module']}. Due {when}.", f"/study/deck/{k['id']}", f"deck{k['id']}")
+
+    # 3b. 1st-class checklists with red items, when that module has a deadline in the next 3 weeks
+    if table_exists(conn, "study_checks"):
+        soon = {}
+        for d in conn.execute("SELECT * FROM deadlines WHERE done = 0"):
+            try:
+                left = (date.fromisoformat(d["due"][:10]) - today).days
+            except ValueError:
+                continue
+            if 0 <= left <= 21 and d["module"]:
+                soon[d["module"]] = min(left, soon.get(d["module"], 99))
+        for b in conn.execute("""SELECT s.id, s.title, s.module, COUNT(c.id) AS total,
+                                        SUM(CASE WHEN c.mine = 0 AND c.status = 'red' THEN 1 ELSE 0 END) AS red
+                                 FROM study_sources s JOIN study_checks c ON c.brief_id = s.id
+                                 WHERE s.kind = 'brief' GROUP BY s.id"""):
+            if b["module"] in soon and b["red"]:
+                add("red" if soon[b["module"]] <= 7 else "amber", "🎓", f"{b['title']}: {b['red']} of {b['total']} not covered",
+                    f"Due {days_word(soon[b['module']])}. Close these before you start writing.", f"/study/checklist/{b['id']}", f"chk{b['id']}")
 
     # 4. Today's timetable and calendar (what's still to come)
     for it in today_schedule(conn, today):
@@ -283,6 +301,14 @@ def run_alerts(conn):
         if send_once(conn, f"evening:{today}", f"{random.choice(EVENING)} {head}", body):
             sent.append("evening")
 
+    # Sunday evening: the week's scorecard
+    if now.weekday() == 6 and in_window(setting(conn, "scorecard", "20:00")):
+        import scorecard
+        card = scorecard.week_card(conn, now.date() - timedelta(days=6), now.date())
+        title, body = scorecard.push_text(card)
+        if send_once(conn, f"scorecard:{today}", title, body, "/scorecard"):
+            sent.append("scorecard")
+
     # Nudge before each class / event (default 60 minutes before), 7am-10pm only
     before = int(setting(conn, "before_class", "60") or 0)
     if before and 7 <= now.hour < 22:
@@ -329,6 +355,7 @@ def alerts_page():
         "devices": conn.execute("SELECT * FROM push_subs ORDER BY id").fetchall(),
         "morning": setting(conn, "morning"), "evening": setting(conn, "evening"),
         "before_class": setting(conn, "before_class"), "last_run": setting(conn, "last_run"),
+        "scorecard": setting(conn, "scorecard"),
         "cron_url": f"{request.host_url.replace('http://', 'https://') if 'pythonanywhere' in request.host else request.host_url}alerts/run?key={setting(conn, 'cron_key')}",
         "sent": conn.execute("SELECT * FROM alert_log ORDER BY id DESC LIMIT 8").fetchall(),
     }
@@ -383,7 +410,7 @@ def test_push():
 @bp.route("/alerts/settings", methods=["POST"])
 def save_settings():
     conn = get_db()
-    for k in ("morning", "evening", "before_class"):
+    for k in ("morning", "evening", "before_class", "scorecard"):
         v = request.form.get(k, "").strip()
         if v:
             conn.execute("INSERT OR REPLACE INTO alert_settings (key, value) VALUES (?, ?)", (k, v))

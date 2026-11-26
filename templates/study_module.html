@@ -110,6 +110,9 @@
     .light.green { background: rgba(52,211,153,0.16); color: #0f8a5f; }
     .light.amber { background: rgba(251,146,60,0.16); color: #c2620a; }
     .light.red { background: rgba(248,113,113,0.16); color: #c0392b; }
+    .mini { display: flex; height: 5px; border-radius: 5px; background: rgba(200,70,58,0.18); overflow: hidden; margin-top: 6px; }
+    .mini i { display: block; height: 100%; }
+    .mini .g { background: var(--green); } .mini .a { background: #e8930c; }
     .light.grey { background: rgba(140,105,40,0.063); color: var(--muted); }
 
     /* Pop-up window (source notes, saved notes) */
@@ -278,6 +281,17 @@
                 <input class="field" name="focus" placeholder="Focus on… (optional, e.g. Lecture 7 only)">
                 <button type="submit" id="make-btn">Create</button>
             </form>
+
+            {% if checklists %}
+            <div class="sect">🎓 1st-class checklist</div>
+            {% for c in checklists %}
+            <a class="item check-item" href="/study/checklist/{{ c.id }}">
+                <div class="t">{{ c.title }}<span>{{ c.green }} of {{ c.total }} covered{% if not c.checked %} · not checked yet{% endif %}</span>
+                    <div class="mini"><i class="g" style="width:{{ (100 * c.green / c.total) if c.total else 0 }}%"></i><i class="a" style="width:{{ (100 * c.amber / c.total) if c.total else 0 }}%"></i></div></div>
+                <span class="light {{ 'green' if c.total and c.green == c.total else 'red' if c.red else 'amber' }}">{{ ((100 * c.green / c.total) if c.total else 0) | round | int }}%</span>
+            </a>
+            {% endfor %}
+            {% endif %}
 
             <div class="sect">🃏 Flashcards</div>
             {% for d in decks %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 860px; }
+    .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+    .head { margin: 12px 0 18px; }
+    .head h1 { font-size: 26px; line-height: 1.25; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .meta span { font-size: 12.5px; font-weight: 700; padding: 5px 11px; border-radius: 20px; background: rgba(140,105,40,0.07); color: var(--muted); }
+
+    .score { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+    .ring { --p: 0; width: 104px; height: 104px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center;
+            background: conic-gradient(var(--green) calc(var(--p) * 1%), rgba(140,105,40,0.1) 0); }
+    .ring div { width: 82px; height: 82px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; text-align: center; }
+    .ring b { font-size: 24px; display: block; line-height: 1; }
+    .ring small { font-size: 11px; color: var(--muted); }
+    .score .txt { flex: 1; min-width: 220px; }
+    .score .verdict { font-size: 15px; line-height: 1.55; margin: 0 0 8px; }
+    .counts { display: flex; gap: 14px; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+    .counts .g { color: var(--green); } .counts .a { color: #c2620a; } .counts .r { color: var(--red); }
+    .stale { font-size: 13px; color: #b45309; margin: 0 0 10px; }
+    .err { background: rgba(200,70,58,0.1); color: var(--red); padding: 10px 14px; border-radius: 12px; font-size: 13.5px; margin-bottom: 16px; }
+
+    h2 { font-size: 15px; margin: 22px 0 10px; }
+    .it { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 16px; margin-bottom: 8px;
+          background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--l); scroll-margin-top: 20px; }
+    .it.green { --l: var(--green); } .it.amber { --l: #e8930c; } .it.red { --l: var(--red); }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--l); margin-top: 5px; flex-shrink: 0; }
+    .it .body { flex: 1; min-width: 0; }
+    .it .q { font-weight: 700; font-size: 14.5px; line-height: 1.45; }
+    .it .ev { font-size: 13px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+    .it .nx { font-size: 13px; margin-top: 5px; line-height: 1.5; }
+    .it .nx b { color: var(--pink); }
+    .it .mine { font-size: 11px; font-weight: 800; color: var(--green); margin-left: 6px; }
+    .tick { background: transparent; border: 1.5px solid var(--border); box-shadow: none; color: var(--muted); padding: 6px 10px; font-size: 12px; border-radius: 10px; white-space: nowrap; }
+    .tick:hover { transform: none; box-shadow: none; border-color: var(--green); color: var(--green); }
+    .tick.on { background: rgba(21,136,95,0.12); border-color: var(--green); color: var(--green); }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .alt { background: rgba(140,105,40,0.07); box-shadow: none; color: var(--text); }
+    .ask { font-size: 12.5px; text-decoration: none; color: var(--pink); font-weight: 700; margin-top: 6px; display: inline-block; }
+
+    .busy { position: fixed; inset: 0; z-index: 70; background: rgba(42,34,22,0.34); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; text-align: center; }
+    .busy.show { display: flex; }
+    .busy .spin { width: 46px; height: 46px; border-radius: 50%; border: 4px solid rgba(212,160,23,0.25); border-top-color: var(--pink); animation: spin 0.9s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 760px) { .it { padding: 12px 13px; } .head h1 { font-size: 21px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="back" href="/study/module?m={{ brief.module | urlencode }}">← {{ brief.module }}</a>
+<div class="head">
+    <h1>🎓 {{ brief.title }}</h1>
+    <div class="meta">
+        {% if g.weighting %}<span>{{ g.weighting }}</span>{% endif %}
+        {% if g.length %}<span>{{ g.length }}</span>{% endif %}
+        {% if deadline %}<span>Due {{ deadline.nice }} · {{ 'today' if deadline.days == 0 else 'in ' ~ deadline.days ~ ' days' }}</span>
+        {% elif g.due %}<span>Due {{ g.due }}</span>{% endif %}
+    </div>
+</div>
+
+{% if error %}<div class="err">Didn't work: {{ error }}</div>{% endif %}
+
+<div class="card score">
+    {% set pct = ((100 * green / items|length) if items else 0) | round | int %}
+    <div class="ring" style="--p: {{ pct }}"><div><span><b>{{ pct }}%</b><small>ready</small></span></div></div>
+    <div class="txt">
+        <div class="counts"><span class="g">● {{ green }} covered</span><span class="a">● {{ amber }} partly</span><span class="r">● {{ red }} not yet</span></div>
+        {% if run %}
+            <p class="verdict">{{ run.verdict | mdi }}</p>
+            {% if stale %}<p class="stale">You've added sources since the last check ({{ run.checked_at }}). Check again.</p>
+            {% else %}<p class="muted" style="font-size:12.5px;margin:0 0 10px">Checked {{ run.checked_at }} against {{ run.sources }} source{{ '' if run.sources == 1 else 's' }}.</p>{% endif %}
+        {% else %}
+            <p class="verdict">Not checked yet. Everything's red until Claude compares this against your notes.</p>
+        {% endif %}
+        <div class="actions">
+            <form method="post" action="/study/checklist/{{ brief.id }}/check" onsubmit="document.getElementById('busy').classList.add('show')">
+                <button>🔍 Check against my notes</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for kind, title in [('must', '📋 Must do (from the brief)'), ('first', '🏆 What gets a 1st (from the criteria)')] %}
+{% set group = items | selectattr('kind', 'equalto', kind) | list %}
+{% if group %}
+<h2>{{ title }}</h2>
+{% for c in group %}
+<div class="it {{ c.light }}" id="c{{ c.id }}">
+    <span class="dot"></span>
+    <div class="body">
+        <div class="q">{{ c.item }}{% if c.mine %}<span class="mine">✓ ticked by you</span>{% endif %}</div>
+        {% if c.evidence %}<div class="ev">📎 {{ c.evidence }}</div>{% endif %}
+        {% if c.next and c.light != 'green' %}<div class="nx"><b>Next:</b> {{ c.next }}</div>{% endif %}
+        {% if c.light != 'green' %}
+        <a class="ask" href="/study/module?m={{ brief.module | urlencode }}&q={{ ('For my assignment \"' ~ brief.title ~ '\", help me with this so it is at 1st-class level: ' ~ c.item ~ '. Tell me exactly what to do and how to write it up.') | urlencode }}">💬 Ask Claude how →</a>
+        {% endif %}
+    </div>
+    <form method="post" action="/study/check/{{ c.id }}/tick"><button class="tick {{ 'on' if c.mine }}">{{ '✓ Done' if c.mine else 'Mark done' }}</button></form>
+</div>
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+<div class="busy" id="busy"><div><div class="spin"></div><div style="font-weight:700">Checking this against all your notes…</div>
+    <div class="muted" style="font-size:13px;margin-top:6px">Usually under a minute. Keep this page open.</div></div></div>
+<script>window.addEventListener("pageshow", () => document.getElementById("busy").classList.remove("show"));</script>
+{% endblock %}

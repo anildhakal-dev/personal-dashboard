@@ -44,7 +44,7 @@
     .devices form { margin-left: auto; }
     .x { background: transparent; box-shadow: none; color: var(--muted); padding: 2px 8px; font-size: 12px; }
     .x:hover { color: var(--red); transform: none; box-shadow: none; }
-    .times { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; align-items: end; }
+    .times { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 10px; align-items: end; }
     .times label { font-size: 12px; color: var(--muted); display: grid; gap: 5px; }
     .log { font-size: 12.5px; color: var(--muted); margin: 0; padding-left: 18px; line-height: 1.7; }
     @media (max-width: 760px) {
@@ -84,7 +84,7 @@
 
 <div class="card setup" id="setup">
     <h2>📲 Notifications on your phone</h2>
-    <p class="muted" style="margin:0 0 6px;font-size:13.5px">A morning round-up, an evening check, and a nudge before each class or calendar event.</p>
+    <p class="muted" style="margin:0 0 6px;font-size:13.5px">A morning round-up, an evening check, a nudge before each class or calendar event, and your <a href="/scorecard" style="color:var(--pink)">scorecard</a> on Sunday evening.</p>
 
     <div class="step">
         <span class="num">1</span>
@@ -128,6 +128,7 @@
                 <label>Morning round-up<input class="field" type="time" name="morning" value="{{ info.morning }}"></label>
                 <label>Evening check<input class="field" type="time" name="evening" value="{{ info.evening }}"></label>
                 <label>Mins before a class<input class="field" type="number" name="before_class" min="0" max="240" value="{{ info.before_class }}"></label>
+                <label>Sunday scorecard<input class="field" type="time" name="scorecard" value="{{ info.scorecard }}"></label>
                 <button>{{ 'Saved ✓' if saved else 'Save' }}</button>
             </form>
         </div>

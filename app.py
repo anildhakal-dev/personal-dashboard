@@ -1313,6 +1313,10 @@ app.register_blueprint(study.bp)
 import alerts
 app.register_blueprint(alerts.bp)
 
+# ---------- Weekly scorecard (scorecard.py) ----------
+import scorecard
+app.register_blueprint(scorecard.bp)
+
 
 setup_database()
 

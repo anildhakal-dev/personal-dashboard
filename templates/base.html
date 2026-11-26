@@ -217,6 +217,7 @@
         <a class="{{ 'active' if request.path == '/money' }}" href="/money">💷 Money</a>
         <a class="{{ 'active' if request.path == '/quotes' }}" href="/quotes">💬 Quotes</a>
         <a class="{{ 'active' if request.path == '/calendar' }}" href="/calendar">📅 Calendar</a>
+        <a class="{{ 'active' if request.path == '/scorecard' }}" href="/scorecard">📊 Scorecard</a>
         <a class="{{ 'active' if request.path.startswith('/alerts') }}" href="/alerts">🔔 Alerts {% if alert_count %}<span class="nav-count">{{ alert_count }}</span>{% endif %}</a>
         <a href="/logout">🚪 Log out</a>
         </div>

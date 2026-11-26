@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block extra_style %}
+<style>
+    main { max-width: 960px; }
+    .head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+    .head p { margin: 8px 0 0; }
+    .weeknav { display: flex; gap: 8px; align-items: center; }
+    .weeknav a { text-decoration: none; color: var(--text); font-weight: 700; font-size: 14px; padding: 8px 13px; border-radius: 12px;
+                 background: var(--panel); border: 1px solid var(--border); }
+    .weeknav a.off { opacity: 0.35; pointer-events: none; }
+
+    .hero { display: flex; gap: 26px; align-items: center; flex-wrap: wrap; }
+    .grade { width: 120px; height: 120px; border-radius: 30px; display: grid; place-items: center; flex-shrink: 0;
+             font-size: 64px; font-weight: 800; color: var(--ink); background: var(--shine);
+             box-shadow: 0 14px 34px rgba(212,160,23,0.35), inset 0 1px 0 rgba(255,255,255,0.6); }
+    .grade.D, .grade.F { background: linear-gradient(135deg, #f0a59c, #c8463a 60%, #e07b6f); color: white; box-shadow: 0 14px 34px rgba(200,70,58,0.3); }
+    .hero .txt { flex: 1; min-width: 240px; }
+    .hero .pct { font-size: 13px; font-weight: 800; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+    .hero .verdict { font-size: 19px; font-weight: 700; line-height: 1.4; margin: 6px 0 12px; }
+    .fix { background: rgba(212,160,23,0.1); border: 1px solid rgba(212,160,23,0.3); border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+    .fix b { color: var(--pink); }
+
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .part { margin: 0; text-decoration: none; color: var(--text); display: block; border-left: 4px solid var(--l); transition: transform 0.15s; }
+    .part:hover { transform: translateY(-2px); }
+    .part.green { --l: var(--green); } .part.amber { --l: #e8930c; } .part.red { --l: var(--red); } .part.grey { --l: var(--border); }
+    .part .top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .part .name { font-weight: 800; font-size: 15px; }
+    .part .s { margin-left: auto; font-weight: 800; font-size: 15px; color: var(--l); }
+    .part.grey .s { color: var(--muted); }
+    .part .h { font-size: 17px; font-weight: 700; }
+    .part .d { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .bar { height: 6px; border-radius: 6px; background: rgba(140,105,40,0.1); overflow: hidden; margin-top: 12px; }
+    .bar i { display: block; height: 100%; background: var(--l); border-radius: 6px; }
+
+    .hist { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hist a { text-decoration: none; color: var(--text); text-align: center; padding: 10px 14px; border-radius: 14px; background: rgba(140,105,40,0.05); border: 1px solid var(--border); min-width: 80px; }
+    .hist b { display: block; font-size: 22px; }
+    .hist span { font-size: 11.5px; color: var(--muted); }
+    .empty { text-align: center; padding: 30px; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .hist a { flex: 1 1 40%; } .grade { width: 96px; height: 96px; font-size: 50px; border-radius: 24px; } .hero .verdict { font-size: 17px; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="head">
+    <div>
+        <h1>📊 <span class="gradient-text">Scorecard</span></h1>
+        <p class="muted">{{ card.monday.strftime('%d %b') }} – {{ card.sunday.strftime('%d %b') }}{% if card.current %} · this week so far{% endif %}</p>
+    </div>
+    <div class="weeknav">
+        <a href="/scorecard?w={{ back + 1 }}">← Earlier</a>
+        <a href="/scorecard?w={{ back - 1 }}" class="{{ 'off' if back == 0 }}">Later →</a>
+    </div>
+</div>
+
+{% if not card.tracked %}
+<div class="card empty"><div style="font-size:40px">🫥</div><p><b>Nothing logged this week.</b><br><span class="muted">No gym sets, protein, trades or to-dos. Can't grade what you don't track.</span></p></div>
+{% else %}
+<div class="card hero">
+    <div class="grade {{ card.grade }}">{{ card.grade }}</div>
+    <div class="txt">
+        <div class="pct">{{ card.score }}% overall</div>
+        <div class="verdict">{{ card.verdict }}</div>
+        <div class="fix"><b>Fix next week:</b> {{ card.fix }}</div>
+    </div>
+</div>
+
+<div class="grid">
+    {% for p in card.parts %}
+    <a class="card part {{ p.light }}" href="{{ p.url }}">
+        <div class="top"><span style="font-size:20px">{{ p.emoji }}</span><span class="name">{{ p.name }}</span>
+            <span class="s">{{ p.score ~ '%' if p.score is not none else 'info' }}</span></div>
+        <div class="h">{{ p.headline }}</div>
+        <div class="d">{{ p.detail }}</div>
+        {% if p.score is not none %}<div class="bar"><i style="width:{{ p.score }}%"></i></div>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+{% endif %}
+
+<div class="card" style="margin-top:22px">
+    <h2>Last 4 weeks</h2>
+    <div class="hist">
+        {% for h in history %}
+        <a href="/scorecard?w={{ h.w }}"><b>{{ h.grade }}</b><span>w/c {{ h.label }} · {{ h.score }}</span></a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
