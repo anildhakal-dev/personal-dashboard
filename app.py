@@ -18,7 +18,7 @@ DB = "dashboard.db"
 # Runs before every page: if you're not logged in, you go to the login page
 @app.before_request
 def require_login():
-    if request.path in ("/login", "/alerts/run") or request.path.startswith("/static/"):
+    if request.path in ("/login", "/alerts/run", "/sw.js") or request.path.startswith("/static/"):
         return None
     if not session.get("logged_in"):
         return redirect("/login")

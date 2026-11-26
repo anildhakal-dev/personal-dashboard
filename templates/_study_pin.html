@@ -1,9 +1,0 @@
-{# A saved note, shown in the pop-up #}
-<div class="msg assistant" data-cites='{{ cites | tojson | forceescape }}'>
-    <div class="modal-kicker">📌 Saved note · {{ p.created[:10] }}</div>
-    <h2 class="modal-title">{{ p.title }}</h2>
-    <div class="bubble plain">{{ p.content | md }}</div>
-</div>
-<form action="/study/pin/{{ p.id }}/delete" method="post" onsubmit="return confirm('Delete this note?')" class="modal-foot">
-    <button class="ghost danger">Delete note</button>
-</form>

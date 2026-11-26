@@ -5,7 +5,7 @@
 # Notifications use "web push": the phone app (Add to Home Screen) asks permission once,
 # then the dashboard can send to it even when the app is closed.
 
-from flask import Blueprint, render_template, request, redirect, jsonify
+from flask import Blueprint, render_template, request, redirect, jsonify, send_from_directory
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 import sqlite3
@@ -335,6 +335,16 @@ def alerts_page():
     conn.close()
     return render_template("alerts.html", groups=groups, total=len(items), info=info,
                            headline=random.choice(HEADLINES), saved=request.args.get("saved"))
+
+
+@bp.route("/sw.js")
+def service_worker():
+    """The background worker that shows notifications. Served from the top of the site
+    so it covers every page (iPhone needs this)."""
+    resp = send_from_directory("static", "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
 
 
 @bp.route("/alerts/subscribe", methods=["POST"])

@@ -96,6 +96,9 @@
                 <button type="button" class="alt" id="test">Send a test</button>
                 <span class="status" id="status"></span>
             </div>
+            <p id="tips" style="display:none;margin-top:10px">If it still won't work: delete the Dashboard icon from your home screen,
+               open the site in Safari, tap Share, then <b style="display:inline">Add to Home Screen</b>, open it from the new icon and try again.
+               Also check iPhone Settings, General, About: iOS needs to be 16.4 or newer.</p>
             {% if info.devices %}
             <ul class="devices">
                 {% for d in info.devices %}
@@ -161,25 +164,44 @@ function deviceName() {
     return "Device";
 }
 
+// Register the background worker as soon as the page opens, so the button
+// can ask for permission straight away when tapped (iPhone is fussy about this)
+const standalone = window.navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+const canPush = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+let reg = null;
+if (canPush) {
+    // remove the older worker from the first version (it lived in /static/)
+    navigator.serviceWorker.getRegistrations().then(list => list.forEach(r => { if (r.scope.includes("/static/")) r.unregister(); }));
+    navigator.serviceWorker.register("/sw.js", { scope: "/" })
+        .then(r => { reg = r; return navigator.serviceWorker.ready; })
+        .then(r => { reg = r; return r.pushManager.getSubscription(); })
+        .then(sub => { if (sub && Notification.permission === "granted") say("On for this device ✓", true); })
+        .catch(e => say("Setup problem: " + e.message, false));
+}
+const timeout = (ms, what) => new Promise((_, no) => setTimeout(() => no(new Error(what)), ms));
+
 document.getElementById("enable").onclick = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        const ios = /iPhone|iPad/.test(navigator.userAgent);
-        return say(ios ? "Open the dashboard from your home screen icon, then try again." : "This browser can't do notifications.", false);
-    }
+    const ios = /iPhone|iPad/.test(navigator.userAgent);
+    if (!canPush) return say(ios ? "Open the dashboard from your home screen icon, then try again." : "This browser can't do notifications.", false);
+    if (!reg) return say("Still loading, wait 2 seconds and tap again.", false);
+    if (Notification.permission === "denied")
+        return say("Blocked earlier. Go to iPhone Settings, Notifications, Dashboard, and turn on Allow Notifications. Then tap again.", false);
     try {
-        say("Asking…", true);
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") return say("Blocked. Allow notifications for the dashboard in Settings.", false);
-        const reg = await navigator.serviceWorker.register("/static/sw.js");
-        await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(KEY) });
+        say("Tap Allow on the pop-up…", true);
+        // Subscribing shows the Allow pop-up itself; give up after 30 seconds instead of hanging
+        let sub = await Promise.race([
+            reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(KEY) }),
+            timeout(30000, "no answer from the iPhone (see the tips below)"),
+        ]);
         const body = Object.assign(sub.toJSON(), { device: deviceName() });
         const r = await fetch("/alerts/subscribe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        if (!r.ok) throw new Error("Server said " + r.status);
+        if (!r.ok) throw new Error("server said " + r.status);
         say("On ✓ Reloading…", true);
         setTimeout(() => location.reload(), 900);
-    } catch (e) { say("Didn't work: " + e.message, false); }
+    } catch (e) {
+        say("Didn't work: " + e.message, false);
+        document.getElementById("tips").style.display = "block";
+    }
 };
 
 document.getElementById("test").onclick = async () => {
